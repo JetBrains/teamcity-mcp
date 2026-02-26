@@ -133,6 +133,24 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
     }
 
     @Test
+    fun `agent retrieves server info via REST tool`() {
+        val output = scripts.run("gemini-agent.sh",
+            listOf("run-prompt", CONTAINER_NAME,
+                "Use the teamcity_rest_get tool to call /app/rest/server with query fields=version,buildNumber.\n" +
+                    "Print the result on a line starting with:\n" +
+                    "SERVER: version=<version> build=<buildNumber>",
+                findApiKey()!!))
+
+        output.dump("rest tool")
+            .assertGeminiSuccess("rest tool")
+            .assertToolCalled("teamcity_rest_get")
+            .assertOutputContainsAny(
+                "SERVER:", "version",
+                message = "agent must report server info retrieved via REST tool"
+            )
+    }
+
+    @Test
     fun `agent discovers TeamCity MCP resources`() {
         assumeTrue(supportsResources,
             "Gemini CLI does not expose MCP resource tools in non-interactive mode — skipping")

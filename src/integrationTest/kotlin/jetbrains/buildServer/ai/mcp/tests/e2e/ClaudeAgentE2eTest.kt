@@ -108,6 +108,25 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
     }
 
     @Test
+    fun `agent retrieves server info via REST tool`() {
+        val output = scripts.run("claude-agent.sh",
+            listOf("run-prompt", CONTAINER_NAME,
+                "Use the teamcity_rest_get tool to call /app/rest/server with query fields=version,buildNumber.\n" +
+                    "Print the result on a line starting with:\n" +
+                    "SERVER: version=<version> build=<buildNumber>",
+                findApiKey()!!))
+
+        output.dump("rest tool")
+            .assertNoErrors()
+            .assertExitCode(0, "rest tool")
+            .assertToolCalled("teamcity_rest_get")
+            .assertOutputContainsAny(
+                "SERVER:", "version",
+                message = "agent must report server info retrieved via REST tool"
+            )
+    }
+
+    @Test
     fun `agent discovers TeamCity MCP resources`() {
         val output = scripts.run("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,

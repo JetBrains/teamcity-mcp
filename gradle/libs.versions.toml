@@ -1,0 +1,20 @@
+[versions]
+kotlin = "2.1.21"
+mcp = "0.8.4"
+junit = "5.10.2"
+mockk = "1.13.10"
+ktor = "3.2.3"
+
+[libraries]
+mcp = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = "mcp" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+#kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit5", version.ref = "kotlin" }
+
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit"}
+junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit"}
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.10.2" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk"}
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+rodm-teamcity-server = { id = "io.github.rodm.teamcity-server", version = "1.5.6" }

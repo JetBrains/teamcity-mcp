@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<teamcity-plugin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:noNamespaceSchemaLocation="urn:schemas-jetbrains-com:teamcity-plugin-v1-xml">
+    <info>
+        <name>mcp</name>
+        <display-name>MCP Server</display-name>
+        <version>@Plugin_Version@</version>
+        <description>HTTP MCP Server for TeamCity Server</description>
+        <vendor>
+            <name>JetBrains</name>
+            <url>https://www.jetbrains.com</url>
+        </vendor>
+    </info>
+    <deployment use-separate-classloader="true" node-responsibilities-aware="true" allow-runtime-reload="true"  min-java-version="17"/>
+</teamcity-plugin>
+

@@ -1,0 +1,25 @@
+# Build output
+build/
+
+# Gradle
+.gradle/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# Secrets — contains API keys and passwords
+gradle.properties
+
+# Scripts with hardcoded tokens
+stress_test.py
+
+# Scratch / temp files
+tmp/
+
+# Claude Code session data
+.claude/

@@ -220,7 +220,7 @@ class McpStreamableHttpController(
 
         return launchDeferred(
             coroutineName = "POST init",
-            logContext = "POST initialize requestId=$requestId",
+            logContext = "POST initialize requestId=${requestId.displayValue()}",
             servletRequest = servletRequest,
             servletResponse = servletResponse
         ) { result ->
@@ -300,8 +300,8 @@ class McpStreamableHttpController(
         val session = getTransportSession(sessionId)
 
         return launchDeferred(
-            coroutineName = "POST request $sessionId/$requestId",
-            logContext = "POST request sessionId=$sessionId requestId=$requestId",
+            coroutineName = "POST request $sessionId/${requestId.displayValue()}",
+            logContext = "POST request sessionId=$sessionId requestId=${requestId.displayValue()}",
             servletRequest = servletRequest,
             servletResponse = servletResponse
         ) { result ->
@@ -489,6 +489,11 @@ class McpStreamableHttpController(
         messageJson["params"]?.jsonObject?.get("clientInfo")?.toString()
     } catch (_: Exception) {
         null
+    }
+
+    private fun RequestId.displayValue(): String = when (this) {
+        is RequestId.StringId -> value
+        is RequestId.NumberId -> value.toString()
     }
 
     private fun extractRequestId(messageJson: JsonObject): RequestId? {

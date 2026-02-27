@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Component
 
 /**
- * REST API client that makes real HTTP GET requests to the local TeamCity server.
+ * REST API client that makes real HTTP requests to the local TeamCity server.
  */
 @Component
 class RestApiClientImpl(
@@ -19,7 +19,18 @@ class RestApiClientImpl(
     private val serverUrlProvider: ServerUrlProvider
 ) : RestApiClient {
 
-    override suspend fun get(path: String, query: String): RestApiResponse {
+    override suspend fun get(path: String, query: String): RestApiResponse =
+        executeRequest(HttpMethod.GET, path, query)
+
+    override suspend fun post(path: String, query: String, body: String): RestApiResponse =
+        executeRequest(HttpMethod.POST, path, query, body)
+
+    private suspend fun executeRequest(
+        method: HttpMethod,
+        path: String,
+        query: String,
+        body: String? = null
+    ): RestApiResponse {
         val forwardContext = executionContext.currentServletForwardContext()
             ?: error("Servlet forwarding context is not available for this tool execution")
 
@@ -28,9 +39,14 @@ class RestApiClientImpl(
         val url = if (query.isBlank()) "$baseUrl$path" else "$baseUrl$path?$query"
 
         val builder = HTTPRequestBuilder.request(url)
-            .withMethod(HttpMethod.GET)
+            .withMethod(method)
             .withHeader("Accept", "application/json")
+            .withUserAgent("mcp-rest-client")
             .allowNonSecureConnection(true)
+
+        if (body != null) {
+            builder.withPostStringEntity(body, "application/json", Charsets.UTF_8)
+        }
 
         originalRequest.getHeader("Authorization")?.let {
             builder.withHeader("Authorization", it)

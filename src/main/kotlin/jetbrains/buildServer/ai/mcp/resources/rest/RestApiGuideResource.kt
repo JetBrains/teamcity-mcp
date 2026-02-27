@@ -1,5 +1,6 @@
 package jetbrains.buildServer.ai.mcp.resources.rest
 
+import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
 import jetbrains.buildServer.ai.mcp.resources.McpResource
 import org.springframework.stereotype.Component
 
@@ -261,7 +262,7 @@ query: locator=affectedProject:(id:PROJECT_ID),status:FAILURE,defaultFilter:true
 
 ### Build Queue
 ```
-path: /app/rest/buildQueue
+path: $BUILD_QUEUE_PATH
 query: fields=build(id,buildType(id,name),branchName,waitReason)
 ```
 

@@ -22,7 +22,10 @@ class RestGetToolTest {
         body: String = "{}",
         statusCode: Int = 200,
         truncated: Boolean = false
-    ) = RestApiClient { _, _ -> RestApiResponse(body, statusCode, truncated) }
+    ) = object : RestApiClient {
+        override suspend fun get(path: String, query: String) = RestApiResponse(body, statusCode, truncated)
+        override suspend fun post(path: String, query: String, body: String) = throw UnsupportedOperationException()
+    }
 
     /** Client that captures path and query for assertions. */
     private class CapturingClient(
@@ -36,6 +39,9 @@ class RestGetToolTest {
             capturedQuery = query
             return response
         }
+
+        override suspend fun post(path: String, query: String, body: String): RestApiResponse =
+            throw UnsupportedOperationException()
     }
 
     // -----------------------------------------------------------------------
@@ -568,9 +574,14 @@ class RestGetToolTest {
     @Nested
     inner class ErrorHandling {
 
+        private fun throwingClient(e: Exception) = object : RestApiClient {
+            override suspend fun get(path: String, query: String): RestApiResponse = throw e
+            override suspend fun post(path: String, query: String, body: String): RestApiResponse = throw e
+        }
+
         @Test
         fun `client exception returns error result with message`() = runBlocking {
-            val client = RestApiClient { _, _ -> throw RuntimeException("Connection refused") }
+            val client = throwingClient(RuntimeException("Connection refused"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
             })
@@ -580,7 +591,7 @@ class RestGetToolTest {
 
         @Test
         fun `client exception returns error result not success`() = runBlocking {
-            val client = RestApiClient { _, _ -> throw IllegalStateException("timeout") }
+            val client = throwingClient(IllegalStateException("timeout"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10")
@@ -590,9 +601,7 @@ class RestGetToolTest {
 
         @Test
         fun `RestApiException 404 gives path guidance`() = runBlocking {
-            val client = RestApiClient { _, _ ->
-                throw RestApiException(404, "Not Found", "Nothing here")
-            }
+            val client = throwingClient(RestApiException(404, "Not Found", "Nothing here"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10")
@@ -604,9 +613,7 @@ class RestGetToolTest {
 
         @Test
         fun `RestApiException 403 gives permission guidance`() = runBlocking {
-            val client = RestApiClient { _, _ ->
-                throw RestApiException(403, "Forbidden", "Access denied")
-            }
+            val client = throwingClient(RestApiException(403, "Forbidden", "Access denied"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10")
@@ -618,9 +625,7 @@ class RestGetToolTest {
 
         @Test
         fun `RestApiException 500 gives retry guidance`() = runBlocking {
-            val client = RestApiClient { _, _ ->
-                throw RestApiException(500, "Internal Server Error", "Oops")
-            }
+            val client = throwingClient(RestApiException(500, "Internal Server Error", "Oops"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10")
@@ -632,9 +637,7 @@ class RestGetToolTest {
 
         @Test
         fun `RestApiException 400 gives query guidance`() = runBlocking {
-            val client = RestApiClient { _, _ ->
-                throw RestApiException(400, "Bad Request", "Bad locator syntax")
-            }
+            val client = throwingClient(RestApiException(400, "Bad Request", "Bad locator syntax"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10")

@@ -4,20 +4,17 @@ import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
-fun interface RestApiClient {
+interface RestApiClient {
     suspend fun get(path: String, query: String): RestApiResponse
+    suspend fun post(path: String, query: String, body: String): RestApiResponse
 }
 
 data class RestApiResponse(
@@ -51,12 +48,18 @@ class RestGetTool(
 
         internal const val DEFAULT_PAGE_SIZE = 10
         internal const val MAX_PAGE_SIZE = 100
-        private const val REST_PATH_PREFIX = "/app/rest/"
 
         private val LOCATOR_START_PATTERN = Regex("""(?:^|,)start:\d+""")
         private val LOCATOR_COUNT_PATTERN = Regex("""(?:^|,)count:(\d+)""")
         private val EMPTY_COUNT_PATTERN = Regex("""^\s*\{\s*"count"\s*:\s*0\s*[,}]""")
-        private val json = Json
+
+        private val ERROR_GUIDANCE = mapOf(
+            400 to "Check your query syntax — locator or fields may be malformed.",
+            403 to "Access denied. The current token may lack permission for this endpoint.",
+            404 to "Resource not found. Check the path and locator — the resource may not exist or the ID may be wrong.",
+            405 to "Method not allowed on this endpoint.",
+            500 to "TeamCity server error. Try again or simplify the query."
+        )
     }
 
     override val name = NAME
@@ -148,26 +151,12 @@ class RestGetTool(
     override suspend fun execute(arguments: JsonObject?): McpToolResult {
         val path = arguments?.get("path")?.jsonPrimitive?.content?.trim()
             ?.takeIf { it.isNotBlank() }
-            ?: return McpToolResult.Companion.error("'path' parameter is required")
+            ?: return McpToolResult.error("'path' parameter is required")
 
-        if (!path.startsWith(REST_PATH_PREFIX)) {
-            return McpToolResult.Companion.error("Path must start with $REST_PATH_PREFIX")
-        }
-
-        if (path.contains("..")) {
-            return McpToolResult.Companion.error("Path must not contain '..' segments")
-        }
-
-        if (path.contains("?")) {
-            return McpToolResult.Companion.error("Path must not contain query parameters. Use the 'query' parameter instead.")
-        }
-
-        if (path.contains("#")) {
-            return McpToolResult.Companion.error("Path must not contain '#' fragment identifiers")
-        }
+        RestToolUtils.validatePath(path)?.let { return it }
 
         val client = restApiClient
-            ?: return McpToolResult.Companion.error("REST API client is not configured")
+            ?: return McpToolResult.error("REST API client is not configured")
 
         val rawQuery = arguments["query"]?.jsonPrimitive?.content?.trim()?.removePrefix("?") ?: ""
         val paging = ensurePaging(rawQuery)
@@ -178,10 +167,10 @@ class RestGetTool(
             formatResponse(path, paging, response, hasFields)
         } catch (e: RestApiException) {
             LOGGER.warnAndDebugDetails("REST GET $path failed with HTTP ${e.statusCode}", e)
-            McpToolResult.Companion.error(formatRestApiError(e))
+            McpToolResult.error(RestToolUtils.formatRestApiError(e, ERROR_GUIDANCE))
         } catch (e: Exception) {
             LOGGER.warnAndDebugDetails("REST GET $path failed", e)
-            McpToolResult.Companion.error("REST request failed: ${e.message}")
+            McpToolResult.error("REST request failed: ${e.message}")
         }
     }
 
@@ -299,55 +288,16 @@ class RestGetTool(
             notes.add("Result contains 0 items. Verify your locator filters or try a broader query.")
         }
 
-        var contentType = "text/plain"
-        var body: JsonElement? = null
-        var bodyText: String? = null
-        if (isLogEndpoint) {
-            bodyText = response.body
-        } else {
-            val parsedBody = parseJsonOrNull(response.body)
-            if (parsedBody != null) {
-                contentType = "application/json"
-                body = parsedBody
-            } else {
-                bodyText = response.body
-                notes.add("Response body was not valid JSON. Returned as plain text in bodyText.")
-            }
+        return RestToolUtils.buildResponseJson(
+            url = url,
+            statusCode = response.statusCode,
+            responseBody = response.body,
+            notes = notes,
+            isPlainText = isLogEndpoint
+        ) {
+            put("truncated", response.truncated)
+            put("hasNextHref", hasNextHref)
         }
-
-        val payload = buildJsonObject {
-            putJsonObject("meta") {
-                put("url", url)
-                put("statusCode", response.statusCode)
-                put("truncated", response.truncated)
-                put("hasNextHref", hasNextHref)
-                putJsonArray("notes") {
-                    notes.forEach { add(it) }
-                }
-            }
-            put("contentType", contentType)
-
-            if (body != null) {
-                put("body", body)
-            } else {
-                put("bodyText", bodyText ?: "")
-            }
-        }
-
-        return McpToolResult.Companion.success(payload.toString())
-    }
-
-    private fun formatRestApiError(e: RestApiException): String {
-        val guidance = when (e.statusCode) {
-            400 -> "Check your query syntax — locator or fields may be malformed."
-            403 -> "Access denied. The current token may lack permission for this endpoint."
-            404 -> "Resource not found. Check the path and locator — the resource may not exist or the ID may be wrong."
-            405 -> "Method not allowed on this endpoint."
-            in 500..599 -> "TeamCity server error. Try again or simplify the query."
-            else -> ""
-        }
-        val base = "HTTP ${e.statusCode} ${e.statusText}: ${e.message}"
-        return if (guidance.isNotEmpty()) "$base\n$guidance" else base
     }
 
     private fun hasFieldsParam(query: String): Boolean {
@@ -367,14 +317,6 @@ class RestGetTool(
 
     private fun isLogEndpoint(path: String): Boolean {
         return path.trimEnd('/').endsWith("/log")
-    }
-
-    private fun parseJsonOrNull(body: String): JsonElement? {
-        return try {
-            json.parseToJsonElement(body)
-        } catch (_: Exception) {
-            null
-        }
     }
 }
 

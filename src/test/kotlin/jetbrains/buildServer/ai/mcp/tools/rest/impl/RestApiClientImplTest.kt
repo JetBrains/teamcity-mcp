@@ -103,6 +103,93 @@ class RestApiClientImplTest {
         verify { httpResponse.close() }
     }
 
+    @Test
+    fun `post fails when servlet context is not bound`() {
+        val client = RestApiClientImpl(McpToolExecutionContext(), requestHandler, serverUrlProvider)
+
+        val ex = assertThrows(IllegalStateException::class.java) {
+            runBlocking {
+                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            }
+        }
+
+        assertEquals(
+            "Servlet forwarding context is not available for this tool execution",
+            ex.message
+        )
+    }
+
+    @Test
+    fun `post returns response body and status code`() {
+        val httpResponse = mockk<HTTPRequestBuilder.Response>()
+        every { httpResponse.statusCode } returns 200
+        every { httpResponse.bodyAsString } returns """{"id":123}"""
+        every { httpResponse.close() } returns Unit
+        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+
+        val context = McpToolExecutionContext()
+        val request = mockServletRequest()
+        val response = mockk<HttpServletResponse>(relaxed = true)
+
+        val result = runBlocking {
+            context.withServletForwardContext(request, response) {
+                RestApiClientImpl(context, requestHandler, serverUrlProvider)
+                    .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            }
+        }
+
+        assertEquals(200, result.statusCode)
+        assertEquals("""{"id":123}""", result.body)
+        verify { httpResponse.close() }
+    }
+
+    @Test
+    fun `post captures non-200 status codes`() {
+        val httpResponse = mockk<HTTPRequestBuilder.Response>()
+        every { httpResponse.statusCode } returns 403
+        every { httpResponse.bodyAsString } returns "Forbidden"
+        every { httpResponse.close() } returns Unit
+        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+
+        val context = McpToolExecutionContext()
+        val request = mockServletRequest()
+        val response = mockk<HttpServletResponse>(relaxed = true)
+
+        val result = runBlocking {
+            context.withServletForwardContext(request, response) {
+                RestApiClientImpl(context, requestHandler, serverUrlProvider)
+                    .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            }
+        }
+
+        assertEquals(403, result.statusCode)
+        assertEquals("Forbidden", result.body)
+    }
+
+    @Test
+    fun `post closes response even on read failure`() {
+        val httpResponse = mockk<HTTPRequestBuilder.Response>()
+        every { httpResponse.statusCode } returns 200
+        every { httpResponse.bodyAsString } throws RuntimeException("read error")
+        every { httpResponse.close() } returns Unit
+        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+
+        val context = McpToolExecutionContext()
+        val request = mockServletRequest()
+        val response = mockk<HttpServletResponse>(relaxed = true)
+
+        assertThrows(RuntimeException::class.java) {
+            runBlocking {
+                context.withServletForwardContext(request, response) {
+                    RestApiClientImpl(context, requestHandler, serverUrlProvider)
+                        .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+                }
+            }
+        }
+
+        verify { httpResponse.close() }
+    }
+
     private fun mockServletRequest(): HttpServletRequest {
         val request = mockk<HttpServletRequest>()
         every { request.getHeader("Authorization") } returns "Bearer test-token"

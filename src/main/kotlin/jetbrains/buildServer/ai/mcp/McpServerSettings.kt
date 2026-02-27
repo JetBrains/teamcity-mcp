@@ -1,6 +1,6 @@
 package jetbrains.buildServer.ai.mcp
 
-import jetbrains.buildServer.ai.mcp.resources.RestApiGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
 import jetbrains.buildServer.ai.mcp.tools.FeedbackTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.serverSide.TeamCityProperties

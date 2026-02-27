@@ -1,5 +1,6 @@
 package jetbrains.buildServer.ai.mcp.resources
 
+import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

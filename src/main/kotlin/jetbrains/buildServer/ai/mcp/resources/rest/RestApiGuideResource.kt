@@ -1,5 +1,6 @@
-package jetbrains.buildServer.ai.mcp.resources
+package jetbrains.buildServer.ai.mcp.resources.rest
 
+import jetbrains.buildServer.ai.mcp.resources.McpResource
 import org.springframework.stereotype.Component
 
 @Component

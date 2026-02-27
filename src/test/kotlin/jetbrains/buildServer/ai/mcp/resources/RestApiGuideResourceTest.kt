@@ -32,12 +32,21 @@ class RestApiGuideResourceTest {
     }
 
     @Test
-    fun `content covers key topics`() {
+    fun `content covers GET topics`() {
         val content = resource.read()
-        assertTrue(content.contains("teamcity_rest_get"), "Should mention the tool name")
+        assertTrue(content.contains("teamcity_rest_get"), "Should mention the GET tool name")
         assertTrue(content.contains("fields"), "Should cover fields parameter")
         assertTrue(content.contains("locator"), "Should cover locators")
         assertTrue(content.contains("/app/rest/"), "Should contain REST API paths")
         assertTrue(content.contains("Pagination"), "Should cover pagination")
+    }
+
+    @Test
+    fun `content covers POST topics`() {
+        val content = resource.read()
+        assertTrue(content.contains("teamcity_rest_post"), "Should mention the POST tool name")
+        assertTrue(content.contains("personal"), "Should cover personal builds constraint")
+        assertTrue(content.contains("buildQueue"), "Should mention buildQueue endpoint")
+        assertTrue(content.contains("buildType"), "Should cover buildType in body")
     }
 }

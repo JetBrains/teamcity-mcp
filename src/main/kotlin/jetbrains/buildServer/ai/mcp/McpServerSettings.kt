@@ -1,7 +1,7 @@
 package jetbrains.buildServer.ai.mcp
 
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
-import jetbrains.buildServer.ai.mcp.resources.rest.RestPostGuideResource
+
 import jetbrains.buildServer.ai.mcp.tools.FeedbackTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
@@ -38,7 +38,7 @@ class SettingsService {
      */
     fun getEnabledResourceNames(): Set<String> {
         val raw = TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED)
-            ?: return setOf(RestApiGuideResource.SETTINGS_NAME, RestPostGuideResource.SETTINGS_NAME)
+            ?: return setOf(RestApiGuideResource.SETTINGS_NAME)
         if (raw.isBlank()) return emptySet()
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }

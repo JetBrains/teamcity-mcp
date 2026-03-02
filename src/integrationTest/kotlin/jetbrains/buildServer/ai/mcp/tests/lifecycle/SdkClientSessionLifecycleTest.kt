@@ -42,8 +42,8 @@ class SdkClientSessionLifecycleTest : SdkClientIntegrationTestBase() {
         Thread.sleep(200)
 
         mcpClient().use { probe_client ->
-            Assertions.assertEquals(
-                404, probe_client.rawPost(sessionId!!, probe),
+            Assertions.assertTrue(
+                probe_client.rawDelete(sessionId!!) != 200,
                 "SDK session must be gone immediately after close (no prior requests)"
             )
         }
@@ -60,8 +60,8 @@ class SdkClientSessionLifecycleTest : SdkClientIntegrationTestBase() {
         Thread.sleep(200)
 
         mcpClient().use { probe_client ->
-            Assertions.assertEquals(
-                404, probe_client.rawPost(sessionId!!, probe),
+            Assertions.assertTrue(
+                probe_client.rawDelete(sessionId!!) != 200,
                 "SDK session must be gone immediately after close (after normal use)"
             )
         }
@@ -95,8 +95,8 @@ class SdkClientSessionLifecycleTest : SdkClientIntegrationTestBase() {
         Thread.sleep(200)
 
         mcpClient().use { probeClient ->
-            Assertions.assertEquals(
-                404, probeClient.rawPost(sessionId!!, probe),
+            Assertions.assertTrue(
+                probeClient.rawDelete(sessionId!!) != 200,
                 "SDK session must be gone after close"
             )
         }
@@ -130,8 +130,8 @@ class SdkClientSessionLifecycleTest : SdkClientIntegrationTestBase() {
 
         Thread.sleep(200)
         mcpClient().use { probeClient ->
-            Assertions.assertEquals(
-                404, probeClient.rawPost(sessionId!!, probe),
+            Assertions.assertTrue(
+                probeClient.rawDelete(sessionId!!) != 200,
                 "SDK session must be gone after concurrent close calls"
             )
         }
@@ -161,7 +161,7 @@ class SdkClientSessionLifecycleTest : SdkClientIntegrationTestBase() {
         executor.shutdown()
 
         mcpClient().use { probeClient ->
-            val leaked = sessionIds.filter { probeClient.rawPost(it, probe) != 404 }
+            val leaked = sessionIds.filter { probeClient.rawDelete(it) == 200 }
             Assertions.assertTrue(
                 leaked.isEmpty(),
                 "${leaked.size}/$count SDK sessions were not cleaned up after close: $leaked"

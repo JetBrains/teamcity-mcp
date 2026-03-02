@@ -11,6 +11,6 @@
             <url>https://www.jetbrains.com</url>
         </vendor>
     </info>
-    <deployment use-separate-classloader="true" node-responsibilities-aware="false" allow-runtime-reload="true"  min-java-version="17"/>
+    <deployment use-separate-classloader="true" node-responsibilities-aware="true" allow-runtime-reload="true"  min-java-version="17"/>
 </teamcity-plugin>
 

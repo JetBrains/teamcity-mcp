@@ -64,7 +64,7 @@ class McpSmokeTest : McpIntegrationTestBase() {
             val responseBody = response.body()
             Assertions.assertTrue(responseBody.isNotBlank(), "Initialize must return non-empty JSON body")
 
-            val json = Json.Default.parseToJsonElement(responseBody).jsonObject
+            val json = Json.parseToJsonElement(responseBody).jsonObject
             Assertions.assertTrue(json.containsKey("result"), "Response must contain 'result' field")
 
             val result = json["result"]!!.jsonObject
@@ -309,20 +309,23 @@ class McpSmokeTest : McpIntegrationTestBase() {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `POST with unknown session ID returns 404`() {
+    fun `POST with unknown session ID creates session`() {
+        val unknownSessionId = "00000000-0000-0000-0000-000000000000"
         mcpClient().use { client ->
             val body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
             val status = client.rawPost(
-                sessionId = "00000000-0000-0000-0000-000000000000",
+                sessionId = unknownSessionId,
                 body = body
             )
-            Assertions.assertEquals(404, status, "Unknown session ID must yield HTTP 404")
-            println("  ✓ Unknown session ID → $status")
+            Assertions.assertEquals(200, status, "Unknown session ID must create session and return 200")
+            println("  ✓ Unknown session ID → session created ($status)")
+            // Cleanup: delete the auto-created session
+            client.rawDelete(unknownSessionId)
         }
     }
 
     @Test
-    fun `POST after session deletion returns 404`() {
+    fun `POST after session deletion creates new session`() {
         mcpClient().use { client ->
             val session = client.initialize()
             val sessionId = session.sessionId
@@ -331,8 +334,10 @@ class McpSmokeTest : McpIntegrationTestBase() {
 
             val body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
             val status = client.rawPost(sessionId = sessionId, body = body)
-            Assertions.assertEquals(404, status, "Deleted session must yield HTTP 404 on subsequent POST")
-            println("  ✓ Deleted session $sessionId → $status")
+            Assertions.assertEquals(200, status, "POST after deletion must create new session and return 200")
+            println("  ✓ Deleted session $sessionId → recreated ($status)")
+            // Cleanup: delete the auto-created session
+            client.rawDelete(sessionId)
         }
     }
 

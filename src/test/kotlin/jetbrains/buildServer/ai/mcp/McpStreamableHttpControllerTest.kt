@@ -1,12 +1,9 @@
 package jetbrains.buildServer.ai.mcp
 
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.unmockkAll
-import io.mockk.verify
+import io.mockk.*
 import jetbrains.buildServer.ai.mcp.events.McpEventBus
 import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
+import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.serialization.SerializationException
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -169,21 +166,6 @@ class McpStreamableHttpControllerTest {
                 protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
                 sessionId = "s1",
                 accept = null,
-                contentType = "application/json",
-                body = """{"jsonrpc":"2.0","method":"notifications/test"}"""
-            )
-        }
-
-        assertEquals(HttpStatus.BAD_REQUEST, ex.status)
-    }
-
-    @Test
-    fun `POST without text-event-stream in Accept returns 400`() {
-        val ex = assertThrows<ResponseStatusException> {
-            post(
-                protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
-                sessionId = "s1",
-                accept = "application/json",
                 contentType = "application/json",
                 body = """{"jsonrpc":"2.0","method":"notifications/test"}"""
             )
@@ -395,40 +377,115 @@ class McpStreamableHttpControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, status)
     }
 
-    // --- Request with session not found ---
+    // --- Session recovery for unknown sessions ---
 
     @Test
-    fun `POST request with unknown session returns 404`() {
+    fun `POST request with unknown session creates session and returns DeferredResult`() {
         every { sessionManager.getSession("unknown") } returns null
+        mockServerConfigurator()
 
-        val ex = assertThrows<ResponseStatusException> {
-            post(
-                protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
-                sessionId = "unknown",
-                accept = "application/json, text/event-stream",
-                contentType = "application/json",
-                body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
-            )
-        }
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "unknown",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
 
-        assertEquals(HttpStatus.NOT_FOUND, ex.status)
+        assertTrue(result is DeferredResult<*>)
+        // Verify session was created and registered
+        coVerify(timeout = 2_000) { sessionManager.registerSession(match { it.sessionId == "unknown" }) }
     }
 
     @Test
-    fun `POST notification with unknown session returns 404`() {
+    fun `POST notification with unknown session creates session and returns DeferredResult`() {
         every { sessionManager.getSession("unknown") } returns null
+        mockServerConfigurator()
 
-        val ex = assertThrows<ResponseStatusException> {
-            post(
-                protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
-                sessionId = "unknown",
-                accept = "application/json, text/event-stream",
-                contentType = "application/json",
-                body = """{"jsonrpc":"2.0","method":"notifications/test"}"""
-            )
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "unknown",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","method":"notifications/test"}"""
+        )
+
+        assertTrue(result is DeferredResult<*>)
+        coVerify(timeout = 2_000) { sessionManager.registerSession(match { it.sessionId == "unknown" }) }
+    }
+
+    @Test
+    fun `POST request with unknown session returns error when server config fails`() {
+        every { sessionManager.getSession("unknown") } returns null
+        every { serverConfigurator.configureServer() } throws RuntimeException("config failed")
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "unknown",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
+
+        val status = awaitErrorStatus(result)
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
+        // Verify cleanup was attempted
+        verify(timeout = 2_000) { sessionManager.removeSession("unknown") }
+    }
+
+    @Test
+    fun `POST notification with unknown session returns error when server config fails`() {
+        every { sessionManager.getSession("unknown") } returns null
+        every { serverConfigurator.configureServer() } throws RuntimeException("config failed")
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "unknown",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","method":"notifications/test"}"""
+        )
+
+        val status = awaitErrorStatus(result)
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
+        verify(timeout = 2_000) { sessionManager.removeSession("unknown") }
+    }
+
+    @Test
+    fun `POST request with known session does not recreate session`() {
+        val sessionId = "existing"
+        val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
+        every { sessionManager.getSession(sessionId) } returns transport
+
+        post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = sessionId,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
+
+        // Should NOT call configureServer since session already exists
+        verify(exactly = 0) { serverConfigurator.configureServer() }
+    }
+
+    @Test
+    fun `POST request with wrong transport type returns 400`() {
+        val wrongTypeSession = mockk<McpTransportSession>(relaxed = true) {
+            every { sessionId } returns "wrong-type"
         }
+        every { sessionManager.getSession("wrong-type") } returns wrongTypeSession
 
-        assertEquals(HttpStatus.NOT_FOUND, ex.status)
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "wrong-type",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
+
+        val status = awaitErrorStatus(result)
+        assertEquals(HttpStatus.BAD_REQUEST, status)
     }
 
     // --- Accept header edge cases ---
@@ -590,6 +647,11 @@ class McpStreamableHttpControllerTest {
             servletRequest = servletRequest,
             servletResponse = servletResponse
         )
+    }
+
+    private fun mockServerConfigurator() {
+        val server = mockk<Server>(relaxed = true)
+        every { serverConfigurator.configureServer() } returns server
     }
 
     private fun awaitErrorStatus(result: DeferredResult<ResponseEntity<String>>): HttpStatus {

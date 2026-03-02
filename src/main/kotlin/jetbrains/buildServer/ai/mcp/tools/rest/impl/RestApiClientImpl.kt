@@ -3,6 +3,8 @@ package jetbrains.buildServer.ai.mcp.tools.rest.impl
 import jetbrains.buildServer.ServerUrlProvider
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiClient
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse
+import jetbrains.buildServer.serverSide.IOGuard
+import jetbrains.buildServer.util.FuncThrow
 import jetbrains.buildServer.util.HTTPRequestBuilder
 import jetbrains.buildServer.util.http.HttpMethod
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +55,9 @@ class RestApiClientImpl(
         }
 
         val response = withContext(Dispatchers.IO) {
-            requestHandler.doSyncRequest(builder.build())
+            IOGuard.allowNetworkCall(FuncThrow {
+                requestHandler.doSyncRequest(builder.build())
+            })
         }
 
         return try {

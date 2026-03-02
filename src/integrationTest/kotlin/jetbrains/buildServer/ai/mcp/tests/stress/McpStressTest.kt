@@ -87,20 +87,19 @@ class McpStressTest : McpIntegrationTestBase() {
     private fun verifyAllClosed(ids: List<String>) {
         if (ids.isEmpty()) return
 
-        val body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
         val stillAlive = AtomicInteger()
 
         TestMcpClient(serverConfig).use { probe ->
             ids.forEach { id ->
-                val status = probe.rawPost(id, body)
-                if (status != 404) {
-                    println("  ✗ Session $id still alive after close (HTTP $status)")
+                val status = probe.rawDelete(id)
+                if (status == 200) {
+                    println("  ✗ Session $id still alive after close (DELETE returned 200)")
                     stillAlive.incrementAndGet()
                 }
             }
         }
 
-        println("  ✓ ${ids.size - stillAlive.get()}/${ids.size} sessions confirmed gone (HTTP 404)")
+        println("  ✓ ${ids.size - stillAlive.get()}/${ids.size} sessions confirmed gone")
         Assertions.assertEquals(
             0, stillAlive.get(),
             "${stillAlive.get()} session(s) were not cleaned up server-side after DELETE"

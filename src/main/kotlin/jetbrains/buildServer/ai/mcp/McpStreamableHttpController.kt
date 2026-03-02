@@ -227,56 +227,24 @@ class McpStreamableHttpController(
             val newSessionId = Uuid.random().toString()
             LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: $clientInfo)")
 
-            var transport: McpStreamableHttpTransport? = null
+            val transport = createSession(newSessionId)
+            val responseDeferred = transport.captureResponse(requestId)
             try {
-                val maxSessionDurationMs = getMaxSessionDurationMs()
-                val clientIdleTimeoutMs = getClientIdleTimeoutMs()
+                transport.handlePostMessage(body)
 
-                transport = McpStreamableHttpTransport(
-                    sessionId = newSessionId,
-                    executorService = coroutineExecutor,
-                    maxSessionDurationMs = maxSessionDurationMs,
-                    clientIdleTimeoutMs = clientIdleTimeoutMs
+                val response = responseDeferred.await()
+                val responseJson = McpJson.encodeToString(response)
+
+                result.setResult(
+                    ResponseEntity.ok()
+                        .header(SESSION_ID_HEADER, newSessionId)
+                        .header(CONTENT_TYPE_HEADER, APPLICATION_JSON)
+                        .body(responseJson)
                 )
-
-                // Configure and connect MCP server — calls transport.start()
-                serverConfigurator.configureServer().let { server ->
-                    server.onClose {
-                        LOGGER.info("Server connection closed for session: $newSessionId")
-                        terminateSessionAsync(newSessionId, "server closed")
-                    }
-                    server.createSession(transport)
-                    LOGGER.debug("Server connected to transport for session: $newSessionId")
-                }
-
-                sessionManager.registerSession(transport)
-                eventBus.emit(McpEvent.SessionStarted(newSessionId, clientInfo))
-
-                transport.initSessionTimeoutWatchdog(getWatchdogPeriodSec().seconds) { reason ->
-                    terminateSessionAsync(newSessionId, reason)
-                }
-
-                val responseDeferred = transport.captureResponse(requestId)
-                try {
-                    transport.handlePostMessage(body)
-
-                    val response = responseDeferred.await()
-                    val responseJson = McpJson.encodeToString(response)
-
-                    result.setResult(
-                        ResponseEntity.ok()
-                            .header(SESSION_ID_HEADER, newSessionId)
-                            .header(CONTENT_TYPE_HEADER, APPLICATION_JSON)
-                            .body(responseJson)
-                    )
-                } catch (e: Throwable) {
-                    val reason = if (e is CancellationException) "Initialize request cancelled" else "Initialize request failed"
-                    transport.cancelResponse(requestId, reason)
-                    throw e
-                }
             } catch (e: Throwable) {
                 val reason = if (e is CancellationException) "Initialize request cancelled" else "Initialize request failed"
-                withContext(NonCancellable) { cleanupFailedInit(newSessionId, transport, reason) }
+                transport.cancelResponse(requestId, reason)
+                withContext(NonCancellable) { cleanupFailedCreateSession(newSessionId, transport, reason) }
                 throw e
             }
         }
@@ -297,7 +265,6 @@ class McpStreamableHttpController(
             HttpStatus.BAD_REQUEST,
             "Missing or invalid 'id' in request"
         )
-        val session = getTransportSession(sessionId)
 
         return launchDeferred(
             coroutineName = "POST request $sessionId/${requestId.displayValue()}",
@@ -305,6 +272,7 @@ class McpStreamableHttpController(
             servletRequest = servletRequest,
             servletResponse = servletResponse
         ) { result ->
+            val session = getOrCreateSession(sessionId)
             val responseDeferred = session.captureResponse(requestId)
             try {
                 session.handlePostMessage(body)
@@ -335,14 +303,13 @@ class McpStreamableHttpController(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): DeferredResult<ResponseEntity<String>> {
-        val session = getTransportSession(sessionId)
-
         return launchDeferred(
             coroutineName = "POST notif $sessionId",
             logContext = "POST notification sessionId=$sessionId",
             servletRequest = servletRequest,
             servletResponse = servletResponse
         ) { result ->
+            val session = getOrCreateSession(sessionId)
             session.handlePostMessage(body)
             eventBus.emit(McpEvent.MessageReceived(sessionId, extractMethod(messageJson)))
             result.setResult(ResponseEntity.accepted().build())
@@ -507,16 +474,59 @@ class McpStreamableHttpController(
         }
     }
 
-    private fun getTransportSession(sessionId: String): McpStreamableHttpTransport {
-        val session = sessionManager.getSession(sessionId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Session $sessionId not found")
-        if (session !is McpStreamableHttpTransport) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Session $sessionId is not a streamable HTTP transport"
-            )
+    /**
+     * Get an existing session or create a new one if not found locally.
+     * Supports multinode scenarios where session can be initialized on another node.
+     */
+    private suspend fun getOrCreateSession(sessionId: String): McpStreamableHttpTransport {
+        val existing = sessionManager.getSession(sessionId)
+        if (existing != null) {
+            if (existing !is McpStreamableHttpTransport) {
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Session $sessionId is not a streamable HTTP transport"
+                )
+            }
+            return existing
         }
-        return session
+
+        LOGGER.info("Session $sessionId not found locally, creating new session")
+        return createSession(sessionId)
+    }
+
+    /**
+     * Create a new MCP session with the given ID: transport + server + watchdog.
+     * Used by both initialize flow and session recovery.
+     */
+    private suspend fun createSession(sessionId: String): McpStreamableHttpTransport {
+        val transport = McpStreamableHttpTransport(
+            sessionId = sessionId,
+            executorService = coroutineExecutor,
+            maxSessionDurationMs = getMaxSessionDurationMs(),
+            clientIdleTimeoutMs = getClientIdleTimeoutMs()
+        )
+        try {
+            serverConfigurator.configureServer().let { server ->
+                server.onClose {
+                    LOGGER.info("Server connection closed for session: $sessionId")
+                    terminateSessionAsync(sessionId, "server closed")
+                }
+                server.createSession(transport)
+                LOGGER.debug("Server connected to transport for session: $sessionId")
+            }
+
+            sessionManager.registerSession(transport)
+            eventBus.emit(McpEvent.SessionStarted(sessionId, null))
+
+            transport.initSessionTimeoutWatchdog(getWatchdogPeriodSec().seconds) { reason ->
+                terminateSessionAsync(sessionId, reason)
+            }
+
+            return transport
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { cleanupFailedCreateSession(sessionId, transport, "session creation failed") }
+            throw e
+        }
     }
 
     private fun isInvalidJsonRpc(e: Throwable): Boolean {
@@ -554,7 +564,7 @@ class McpStreamableHttpController(
         }
     }
 
-    private suspend fun cleanupFailedInit(sessionId: String, transport: McpStreamableHttpTransport?, reason: String) {
+    private suspend fun cleanupFailedCreateSession(sessionId: String, transport: McpStreamableHttpTransport?, reason: String) {
         sessionManager.removeSession(sessionId)
         if (transport != null) {
             closeTransportSafely(

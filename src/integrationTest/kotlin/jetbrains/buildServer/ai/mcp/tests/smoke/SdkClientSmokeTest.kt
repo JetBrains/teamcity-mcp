@@ -95,9 +95,8 @@ class SdkClientSmokeTest : SdkClientIntegrationTestBase() {
 
         // Verify the session is gone
         Thread.sleep(200)
-        val body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
-        val status = mcpClient().use { probe -> probe.rawPost(sessionId = sessionId!!, body = body) }
-        Assertions.assertEquals(404, status, "Closed SDK session must yield HTTP 404")
+        val status = mcpClient().use { probe -> probe.rawDelete(sessionId!!) }
+        Assertions.assertTrue(status != 200, "Closed SDK session must be gone, but rawDelete returned 200")
         println("  ✓ SDK session $sessionId terminated and confirmed gone")
     }
 

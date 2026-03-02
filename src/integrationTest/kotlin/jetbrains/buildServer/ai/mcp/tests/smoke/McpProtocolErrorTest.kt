@@ -159,11 +159,14 @@ class McpProtocolErrorTest : McpIntegrationTestBase() {
     }
 
     @Test
-    fun `POST with unknown session ID returns 404`() {
+    fun `POST with unknown session ID creates session and returns 200`() {
+        val unknownSessionId = "00000000-0000-0000-0000-000000000000"
         mcpClient().use { client ->
-            val headers = baseHeaders("00000000-0000-0000-0000-000000000000")
+            val headers = baseHeaders(unknownSessionId)
             val status = client.rawPostCustomHeaders(validBody, headers)
-            assertEquals(404, status, "Unknown session ID must yield 404")
+            assertEquals(200, status, "Unknown session ID must create session and return 200")
+            // Cleanup: delete the auto-created session
+            client.rawDelete(unknownSessionId)
         }
     }
 

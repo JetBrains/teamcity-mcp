@@ -12,8 +12,9 @@ import java.util.concurrent.TimeUnit
  * Tests verifying that MCP sessions and their server-side resources are correctly
  * cleaned up under every termination path.
  *
- * Each test confirms cleanup by probing the session with a POST after the expected
- * cleanup event: a properly cleaned-up session must return HTTP 404.
+ * Each test confirms cleanup by probing the session with a DELETE after the expected
+ * cleanup event: a properly cleaned-up session must NOT return HTTP 200.
+ * (POST cannot be used as a probe because the server auto-creates sessions for unknown IDs.)
  *
  * Termination paths covered:
  *  1. Client DELETE before any requests
@@ -41,8 +42,8 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
             val id = session.sessionId
             session.close() // DELETE, no prior requests
             Thread.sleep(200)
-            Assertions.assertEquals(
-                404, client.rawPost(id, probe),
+            Assertions.assertTrue(
+                client.rawDelete(id) != 200,
                 "Session must be gone immediately after DELETE (no prior requests)"
             )
         }
@@ -56,8 +57,8 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
             val id = session.sessionId
             session.close()
             Thread.sleep(200)
-            Assertions.assertEquals(
-                404, client.rawPost(id, probe),
+            Assertions.assertTrue(
+                client.rawDelete(id) != 200,
                 "Session must be gone immediately after DELETE (after normal use)"
             )
         }
@@ -74,8 +75,8 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
             val deleteStatus = client.rawDelete(id)
             Assertions.assertEquals(200, deleteStatus, "DELETE of a session must return 200")
             Thread.sleep(200)
-            Assertions.assertEquals(
-                404, client.rawPost(id, probe),
+            Assertions.assertTrue(
+                client.rawDelete(id) != 200,
                 "Session must be gone after DELETE"
             )
         }
@@ -103,8 +104,8 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
             // Explicit DELETE must clean it up
             Assertions.assertEquals(200, client.rawDelete(id))
             Thread.sleep(200)
-            Assertions.assertEquals(
-                404, client.rawPost(id, probe),
+            Assertions.assertTrue(
+                client.rawDelete(id) != 200,
                 "Session must be gone after explicit DELETE"
             )
         }
@@ -131,8 +132,8 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
                 statuses.none { it >= 500 },
                 "Concurrent DELETEs must not cause server errors, got: $statuses"
             )
-            Assertions.assertEquals(
-                404, client.rawPost(id, probe),
+            Assertions.assertTrue(
+                client.rawDelete(id) != 200,
                 "Session must be gone after concurrent DELETEs"
             )
         }
@@ -160,7 +161,7 @@ class McpSessionLifecycleTest : McpIntegrationTestBase() {
         executor.shutdown()
 
         mcpClient().use { verifier ->
-            val leaked = ids.filter { verifier.rawPost(it, probe) != 404 }
+            val leaked = ids.filter { verifier.rawDelete(it) == 200 }
             Assertions.assertTrue(
                 leaked.isEmpty(),
                 "${leaked.size}/$count sessions were not cleaned up after DELETE: $leaked"

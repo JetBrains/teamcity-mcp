@@ -13,7 +13,7 @@ class RestApiGuideResource : McpResource {
         private val CONTENT = """
 # TeamCity REST API Guide
 
-This guide teaches you how to use the `teamcity_rest_get` and `teamcity_rest_post` tools to query and interact with TeamCity.
+This guide teaches you how to use the `teamcity_rest_get`, `teamcity_rest_post`, and `teamcity_build_log` tools to query and interact with TeamCity.
 
 ---
 
@@ -128,32 +128,54 @@ Default: 10 items from offset 0. Maximum page size: 100.
 
 ### Worked example: "Why did build 48231 fail?"
 
+A typical investigation follows these steps: build overview → build problems → problem logs → test failures → test logs.
+
 **Step 1** — Get build overview:
 ```
 path: /app/rest/builds/id:48231
 query: fields=id,number,status,statusText
 ```
-Response: `{"id":48231,"number":"153","status":"FAILURE","statusText":"Tests failed: 3 (2 new)"}`
+Response: `{"id":48231,"number":"153","status":"FAILURE","statusText":"Tests failed: 3 (2 new), exit code 1 (Step: Compile)"}`
 
-**Step 2** — Check test failures (count first):
-```
-path: /app/rest/builds/id:48231/testOccurrences
-query: locator=status:FAILURE&fields=count
-```
-Response: `{"count":3}`
+The `statusText` tells you what kind of failure: test failures, build step errors, or both.
 
-**Step 3** — Get failure details:
-```
-path: /app/rest/builds/id:48231/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,details)
-```
-Response: `{"count":3,"testOccurrence":[{"name":"com.example.AuthTest.testLogin","details":"Expected 200 but got 401"},...]}`
-
-**Step 4** — If still unclear, check build problems:
+**Step 2** — Get build problems with details and log anchors:
 ```
 path: /app/rest/builds/id:48231/problemOccurrences
-query: fields=problemOccurrence(type,details)
+query: fields=problemOccurrence(id,type,details,logAnchor)
 ```
+Response: `{"count":2,"problemOccurrence":[{"id":"problem:(id:123),build:(id:48231)","type":"TC_EXIT_CODE","details":"Process exited with code 1 (Step: Compile)","logAnchor":"340"},{"id":"problem:(id:456),build:(id:48231)","type":"TC_FAILED_TESTS","details":"3 tests failed"}]}`
+
+**Important**: `details` and `logAnchor` are not returned by default — you must request them explicitly in `fields`.
+`logAnchor` is a build log message index pointing to where the problem occurred.
+
+**Step 3** — View build log around the problem anchor:
+```
+tool: teamcity_build_log
+buildId: 48231
+start: 340
+count: 30
+```
+This jumps directly to the Compile step failure in the log, showing surrounding context.
+
+**Step 4** — Get test failures with details:
+```
+path: /app/rest/builds/id:48231/testOccurrences
+query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
+```
+Response: `{"count":3,"testOccurrence":[{"name":"com.example.AuthTest.testLogin","status":"FAILURE","details":"Expected 200 but got 401","newFailure":true,"logAnchor":"512"},...]}`
+
+**Important**: `details` (stacktrace/stdout/stderr), `newFailure`, and `logAnchor` must be explicitly requested in `fields`.
+`newFailure: true` means this test was passing before — focus on these first.
+
+**Step 5** — If test `details` aren't sufficient, view the log around a test anchor:
+```
+tool: teamcity_build_log
+buildId: 48231
+start: 512
+count: 50
+```
+This shows the build log output surrounding the test execution, which may include stdout, setup steps, or other context not captured in `details`.
 
 ### Finding entities by name
 
@@ -269,20 +291,39 @@ query: fields=build(id,buildType(id,name),branchName,waitReason)
 
 ### Tests
 ```
-# Test failures in a build
+# Test failures in a build — include details and log anchor
 path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,status,details,duration)
+query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
+
+# Test failures — short form (without stacktraces)
+path: /app/rest/builds/id:BUILD_ID/testOccurrences
+query: locator=status:FAILURE&fields=testOccurrence(name,status,duration)
 
 # Test history
 path: /app/rest/testOccurrences
 query: locator=test:(name:com.example.MyTest),count:20&fields=testOccurrence(name,status,duration,build(id,number))
 ```
 
+Key `testOccurrence` fields (must be explicitly requested):
+- `details` — full test output: stacktrace, stdout, stderr
+- `newFailure` — `true` if the test was passing in the previous build (investigate these first)
+- `logAnchor` — build log index; use as `start` in `teamcity_build_log` to see log around the test
+- `firstFailed` — the build where this test first started failing
+- `nextFixed` — the build where this test was fixed
+
 ### Build Problems
 ```
+# Build problems with details and log anchors
 path: /app/rest/builds/id:BUILD_ID/problemOccurrences
-query: fields=problemOccurrence(type,identity,details)
+query: fields=problemOccurrence(id,type,details,logAnchor)
 ```
+
+Key `problemOccurrence` fields (must be explicitly requested):
+- `details` — description of the problem
+- `logAnchor` — build log index; use as `start` in `teamcity_build_log` to jump to the problem location
+- `newFailure` — `true` if this is a new problem
+
+Common problem types: `TC_EXIT_CODE` (non-zero exit), `TC_FAILED_TESTS` (test failures), `TC_COMPILATION_ERROR`, `TC_OOME` (out of memory).
 
 ### Changes
 ```
@@ -486,6 +527,104 @@ Same JSON envelope as `teamcity_rest_get`:
 - **Use `branchName`** to target a specific branch.
 - **Add a `comment`** to document why the build was triggered.
 - **Monitor after triggering** — use `teamcity_rest_get` with the returned build ID to track progress.
+
+---
+
+# Part 3: Viewing Build Logs (`teamcity_build_log`)
+
+## Tool Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `buildId` | Yes | Numeric build ID (e.g. `"19501"`) |
+| `filter` | No | `errors` (FAILURE/ERROR only), `warnings` (WARNING/FAILURE/ERROR), or omit for all |
+| `start` | No | Starting message index for pagination (default: `0`) |
+| `count` | No | Number of messages to retrieve (default: 100, max: 300) |
+
+## Response Format
+
+Plain text output with a single header line followed by log messages:
+
+```
+--- Build log: 51 messages, end of log ---
+
+TeamCity server version is 2026.1 EAP (build 219599)
+Collecting changes in 1 VCS root
+[WARNING] Process exited with code 1
+[ERROR] Process exited with code 1 (Step: Command Line)
+[ERROR] Step Command Line failed
+Build finished
+```
+
+- **Header**: shows message count and either `end of log` or `next page start: N`
+- **Normal messages**: plain text, no prefix
+- **Non-normal messages**: prefixed with `[WARNING]`, `[FAILURE]`, or `[ERROR]`
+- **Notes**: lines starting with `#` provide hints about filtering and pagination
+
+## Pagination
+
+When the log is larger than `count`, the header shows `next page start: N`. Pass this value as `start` in the next call:
+
+```
+# Page 1
+buildId: 19501, count: 100
+→ header: "--- Build log: 100 messages, next page start: 120 ---"
+
+# Page 2
+buildId: 19501, start: 120, count: 100
+→ header: "--- Build log: 80 messages, end of log ---"
+```
+
+## Common Patterns
+
+### Quick scan for errors
+```
+buildId: 19501
+filter: errors
+```
+Returns only FAILURE and ERROR messages — the fastest way to see what went wrong.
+
+### Jump to a build problem in the log
+
+Use `logAnchor` from `problemOccurrences` as the `start` parameter:
+```
+tool: teamcity_rest_get
+path: /app/rest/builds/id:19501/problemOccurrences
+query: fields=problemOccurrence(type,details,logAnchor)
+→ logAnchor: "340"
+
+tool: teamcity_build_log
+buildId: 19501, start: 340, count: 30
+→ shows the log around the problem
+```
+
+### Jump to a test failure in the log
+
+Use `logAnchor` from `testOccurrences` as the `start` parameter:
+```
+tool: teamcity_rest_get
+path: /app/rest/builds/id:19501/testOccurrences
+query: locator=status:FAILURE&fields=testOccurrence(name,details,logAnchor)
+→ logAnchor: "512"
+
+tool: teamcity_build_log
+buildId: 19501, start: 512, count: 50
+→ shows the log around the test execution
+```
+This is useful when `details` (stacktrace) isn't enough and you need surrounding build output.
+
+### Full investigation workflow
+
+See Part 1 "Why did build 48231 fail?" for the complete step-by-step investigation combining build overview, build problems, problem logs, test failures, and test logs.
+
+## Tips
+
+- **Start with `filter=errors`** to quickly find what went wrong.
+- **Use `logAnchor`** from problem/test occurrences to jump to the exact log location (pass as `start`).
+- **Use `filter=warnings`** if errors alone don't explain the failure.
+- **Omit the filter** to see the full build execution flow.
+- **Use pagination** for long logs — don't request `count: 300` unless you need it.
+- **Build IDs are numeric** — the same IDs used in `teamcity_rest_get` with `/app/rest/builds/id:BUILD_ID`.
         """.trimIndent()
     }
 
@@ -496,8 +635,8 @@ Same JSON envelope as `teamcity_rest_get`:
     override val shortName = SETTINGS_NAME
 
     override val description =
-        "Comprehensive guide for AI agents on using the teamcity_rest_get and teamcity_rest_post tools. " +
-        "Covers endpoints, locators, field selection, pagination, triggering builds, and common workflows with examples."
+        "Comprehensive guide for AI agents on using the teamcity_rest_get, teamcity_rest_post, and teamcity_build_log tools. " +
+        "Covers endpoints, locators, field selection, pagination, triggering builds, build log navigation, and common investigation workflows with examples."
 
     override val mimeType = "text/markdown"
 

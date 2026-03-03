@@ -46,12 +46,12 @@ The tool output is a structured JSON envelope:
 
 - Use `meta.notes` for warnings/guidance.
 - If `contentType=application/json`, parse payload from `body`.
-- If `contentType=text/plain` (for example `/log`), read payload from `bodyText`.
+- If `contentType=text/plain` (e.g. `/builds/aggregated/.../status`), read payload from `bodyText`.
 
 ## Fields Parameter
 
 For JSON endpoints, **always specify `fields`** to control response size. Without it, responses can be huge.  
-For plain-text endpoints like `/log`, `fields` is not applicable.
+Some endpoints return plain text (e.g. `/builds/aggregated/.../status`), where `fields` is not applicable.
 
 **List endpoints** — wrap in entity name: `fields=build(id,number,status)`
 **Single-entity endpoints** — use bare names: `fields=id,number,status`
@@ -149,13 +149,10 @@ query: locator=status:FAILURE&fields=testOccurrence(name,details)
 ```
 Response: `{"count":3,"testOccurrence":[{"name":"com.example.AuthTest.testLogin","details":"Expected 200 but got 401"},...]}`
 
-**Step 4** — If still unclear, check build problems and log:
+**Step 4** — If still unclear, check build problems:
 ```
 path: /app/rest/builds/id:48231/problemOccurrences
 query: fields=problemOccurrence(type,details)
-```
-```
-path: /app/rest/builds/id:48231/log
 ```
 
 ### Finding entities by name
@@ -285,12 +282,6 @@ query: locator=test:(name:com.example.MyTest),count:20&fields=testOccurrence(nam
 ```
 path: /app/rest/builds/id:BUILD_ID/problemOccurrences
 query: fields=problemOccurrence(type,identity,details)
-```
-
-### Build Log
-```
-# Returns plain text, not JSON
-path: /app/rest/builds/id:BUILD_ID/log
 ```
 
 ### Changes

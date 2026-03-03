@@ -14,6 +14,13 @@ internal object RestToolUtils {
     const val REST_PATH_PREFIX = "/app/rest/"
     val json: Json = Json
 
+    /**
+     * Sanitizes a query string for safe use in URLs.
+     * Encodes `+` as `%2B` (otherwise interpreted as space) and spaces as `%20`.
+     */
+    fun sanitizeQuery(query: String): String =
+        query.replace("+", "%2B").replace(" ", "%20")
+
     fun validatePath(path: String, queryParamName: String = "query"): McpToolResult? {
         if (!path.startsWith(REST_PATH_PREFIX)) {
             return McpToolResult.error("Path must start with $REST_PATH_PREFIX")

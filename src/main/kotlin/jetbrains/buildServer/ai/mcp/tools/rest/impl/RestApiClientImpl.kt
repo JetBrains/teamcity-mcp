@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest.impl
 import jetbrains.buildServer.ServerUrlProvider
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiClient
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse
+import jetbrains.buildServer.ai.mcp.tools.rest.RestToolUtils
 import jetbrains.buildServer.serverSide.IOGuard
 import jetbrains.buildServer.util.FuncThrow
 import jetbrains.buildServer.util.HTTPRequestBuilder
@@ -38,7 +39,8 @@ class RestApiClientImpl(
 
         val originalRequest = forwardContext.request
         val baseUrl = serverUrlProvider.rootUrl.trimEnd('/')
-        val url = if (query.isBlank()) "$baseUrl$path" else "$baseUrl$path?$query"
+        val sanitizedQuery = RestToolUtils.sanitizeQuery(query)
+        val url = if (sanitizedQuery.isBlank()) "$baseUrl$path" else "$baseUrl$path?$sanitizedQuery"
 
         val builder = HTTPRequestBuilder.request(url)
             .withMethod(method)

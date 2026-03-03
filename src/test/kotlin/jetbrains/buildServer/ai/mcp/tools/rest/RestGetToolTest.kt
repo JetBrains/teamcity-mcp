@@ -75,21 +75,21 @@ class RestGetToolTest {
     }
 
     @Test
-    fun `description clarifies fields are for json endpoints and log exception`() {
+    fun `description clarifies fields are for json endpoints with plain text exception`() {
         val description = tool().description
         Assertions.assertTrue(description.contains("For JSON endpoints"))
-        Assertions.assertTrue(description.contains("/log"))
+        Assertions.assertTrue(description.contains("plain text"))
     }
 
     @Test
-    fun `query schema description clarifies log does not use fields`() {
+    fun `query schema description clarifies plain text endpoints do not use fields`() {
         val queryDescription = tool().inputSchema.properties!!
             .getValue("query")
             .jsonObject
             .getValue("description")
             .jsonPrimitive
             .content
-        Assertions.assertTrue(queryDescription.contains("/log endpoints"))
+        Assertions.assertTrue(queryDescription.contains("plain text"))
         Assertions.assertTrue(queryDescription.contains("'fields' is not used"))
     }
 
@@ -520,10 +520,10 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `log endpoint returns text plain content with bodyText`() = runBlocking {
-            val body = "Build started...\nStep 1"
+        fun `aggregated status endpoint returns text plain content with bodyText`() = runBlocking {
+            val body = "SUCCESS"
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
-                put("path", "/app/rest/builds/id:123/log")
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
                 put("query", "start=0&count=10")
             })
             val payload = parseResultJson(result.text)
@@ -533,9 +533,9 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `log endpoint does not add missing fields note`() = runBlocking {
-            val result = tool(succeedingClient("line1")).execute(buildJsonObject {
-                put("path", "/app/rest/builds/id:123/log")
+        fun `plain text endpoint does not add missing fields note`() = runBlocking {
+            val result = tool(succeedingClient("FAILURE")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
                 put("query", "start=0&count=10")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
@@ -543,7 +543,7 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `non log endpoint with non json body falls back to bodyText with note`() = runBlocking {
+        fun `non plain text endpoint with non json body falls back to bodyText with note`() = runBlocking {
             val result = tool(succeedingClient("{invalid-json")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "start=0&count=10&fields=build(id)")
@@ -557,9 +557,9 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `log endpoint keeps hasNextHref false even when log text mentions nextHref`() = runBlocking {
+        fun `plain text endpoint keeps hasNextHref false even when text mentions nextHref`() = runBlocking {
             val result = tool(succeedingClient("line mentions nextHref here")).execute(buildJsonObject {
-                put("path", "/app/rest/builds/id:123/log")
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
                 put("query", "start=0&count=10")
             })
             val meta = parseResultJson(result.text)["meta"]!!.jsonObject

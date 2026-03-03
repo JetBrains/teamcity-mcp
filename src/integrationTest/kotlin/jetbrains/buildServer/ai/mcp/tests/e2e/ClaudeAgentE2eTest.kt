@@ -127,6 +127,45 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
     }
 
     @Test
+    fun `agent calls common REST endpoints including encoding-sensitive queries`() {
+        val output = scripts.run("claude-agent.sh",
+            listOf("run-prompt", CONTAINER_NAME,
+                """You must call the teamcity_rest_get tool for EACH of the following queries, one call per query. Do NOT skip any.
+After each call, print exactly one result line.
+
+1. path=/app/rest/server query=fields=version,buildNumber
+   Print: SERVER: <version>
+
+2. path=/app/rest/projects query=fields=project(id,name)
+   Print: PROJECTS: <count> projects
+
+3. path=/app/rest/buildTypes query=fields=buildType(id,name)
+   Print: BUILD_TYPES: <count> configs
+
+4. path=/app/rest/builds query=locator=defaultFilter:true,count:3&fields=build(id,status)
+   Print: BUILDS: <count> builds
+
+5. path=/app/rest/agents query=fields=agent(id,name,connected)
+   Print: AGENTS: <count> agents
+
+6. path=/app/rest/builds query=locator=buildType:(id:Test_Test),sinceDate:20240101T000000+0000,count:3&fields=build(id,number)
+   Print: SINCE_DATE: <count> builds (this tests + encoding in dates)
+
+At the end, print DONE.""",
+                findApiKey()!!),
+            timeoutSeconds = 300)
+
+        output.dump("common REST endpoints")
+            .assertExitCode(0, "common REST endpoints")
+            .assertToolCalled("teamcity_rest_get")
+            .assertOutputContainsAny(
+                "SERVER:", "PROJECTS:", "BUILD_TYPES:", "BUILDS:", "AGENTS:",
+                message = "agent must report results from REST endpoint calls"
+            )
+            .assertOutputContains("DONE")
+    }
+
+    @Test
     fun `agent discovers TeamCity MCP resources`() {
         val output = scripts.run("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,

@@ -68,7 +68,7 @@ class RestGetTool(
         |Perform a GET request to the TeamCity REST API to retrieve server data.
         |
         |For JSON endpoints, always use 'fields' to select only the data you need - this is critical for keeping responses manageable.
-        |For plain-text endpoints like /log, 'fields' is not applicable.
+        |Some endpoints return plain text (e.g. /builds/aggregated/.../status), where 'fields' is not applicable.
         |Always paginate with 'start' and 'count' (max $MAX_PAGE_SIZE). Use 'locator' to filter results server-side.
         |
         |Response format:
@@ -98,7 +98,7 @@ class RestGetTool(
                     |  /app/rest/server - server info and version
                     |  /app/rest/builds - build history
                     |  /app/rest/builds/id:<buildId> - specific build details
-                    |  /app/rest/builds/aggregated - build statistics
+                    |  /app/rest/builds/aggregated/<buildLocator>/status - aggregated build status (plain text)
                     |  /app/rest/buildQueue - queued builds
                     |  /app/rest/projects - all projects
                     |  /app/rest/buildTypes - build configurations
@@ -106,7 +106,6 @@ class RestGetTool(
                     |  /app/rest/changes - VCS changes
                     |  /app/rest/builds/id:<buildId>/testOccurrences - test results in a build
                     |  /app/rest/builds/id:<buildId>/problemOccurrences - build problems
-                    |  /app/rest/builds/id:<buildId>/log - build log (plain text)
                 """.trimMargin()
                 )
             }
@@ -119,7 +118,7 @@ class RestGetTool(
                     |Field selection (critical for manageable response size):
                     |  fields=build(id,number,status) - nested field selection
                     |  fields=count - get only the total count
-                    |  /log endpoints return plain text, so 'fields' is not used there
+                    |  Some endpoints (e.g. /builds/aggregated/.../status) return plain text, so 'fields' is not used there
                     |
                     |Locator (server-side filtering):
                     |  locator=buildType:(id:MyBuild),status:SUCCESS,count:10
@@ -263,7 +262,7 @@ class RestGetTool(
         hasFields: Boolean
     ): McpToolResult {
         val url = if (paging.query.isNotEmpty()) "$path?${paging.query}" else path
-        val isLogEndpoint = isLogEndpoint(path)
+        val isPlainTextEndpoint = isPlainTextEndpoint(path)
         val notes = mutableListOf<String>()
 
         paging.note?.lineSequence()
@@ -271,7 +270,7 @@ class RestGetTool(
             ?.filter { it.isNotEmpty() }
             ?.forEach { notes.add(it) }
 
-        if (!hasFields && !isLogEndpoint) {
+        if (!hasFields && !isPlainTextEndpoint) {
             notes.add("No 'fields' parameter specified. Response may be large. Consider adding fields to select only needed data, e.g. fields=build(id,number,status)")
         }
 
@@ -279,12 +278,12 @@ class RestGetTool(
             notes.add("Response was truncated due to size limits. Use narrower 'fields' or smaller 'count'.")
         }
 
-        val hasNextHref = !isLogEndpoint && response.body.contains("\"nextHref\"")
+        val hasNextHref = !isPlainTextEndpoint && response.body.contains("\"nextHref\"")
         if (hasNextHref) {
             notes.add("More results available. Use the 'nextHref' value from the response to fetch the next page.")
         }
 
-        if (!isLogEndpoint && EMPTY_COUNT_PATTERN.containsMatchIn(response.body)) {
+        if (!isPlainTextEndpoint && EMPTY_COUNT_PATTERN.containsMatchIn(response.body)) {
             notes.add("Result contains 0 items. Verify your locator filters or try a broader query.")
         }
 
@@ -293,7 +292,7 @@ class RestGetTool(
             statusCode = response.statusCode,
             responseBody = response.body,
             notes = notes,
-            isPlainText = isLogEndpoint
+            isPlainText = isPlainTextEndpoint
         ) {
             put("truncated", response.truncated)
             put("hasNextHref", hasNextHref)
@@ -315,8 +314,9 @@ class RestGetTool(
             }
     }
 
-    private fun isLogEndpoint(path: String): Boolean {
-        return path.trimEnd('/').endsWith("/log")
+    private fun isPlainTextEndpoint(path: String): Boolean {
+        val normalized = path.trimEnd('/')
+        return normalized.contains("/aggregated/") && normalized.endsWith("/status")
     }
 }
 

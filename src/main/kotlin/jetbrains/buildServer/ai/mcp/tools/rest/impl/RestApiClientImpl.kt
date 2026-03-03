@@ -42,7 +42,7 @@ class RestApiClientImpl(
 
         val builder = HTTPRequestBuilder.request(url)
             .withMethod(method)
-            .withHeader("Accept", "application/json")
+            .withHeader("Accept", "application/json, text/plain")
             .withUserAgent("mcp-rest-client")
             .allowNonSecureConnection(true)
 

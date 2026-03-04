@@ -501,7 +501,7 @@ Same JSON envelope as `teamcity_rest_get`:
 
 - **Always use `fields`** in your request to keep the response manageable.
 - **Find the build config ID first** using `teamcity_rest_get` before triggering a build.
-- **Use `branchName`** to target a specific branch.
+- **Use `branchName`** to target a specific branch. TeamCity picks up Kotlin DSL settings from that branch, so you can test build configuration changes without committing to main.
 - **Add a `comment`** to document why the build was triggered.
 - **Monitor after triggering** — use `teamcity_rest_get` with the returned build ID to track progress.
 

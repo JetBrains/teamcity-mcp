@@ -286,6 +286,8 @@ query: locator=status:FAILURE,currentlyMuted:true&fields=testOccurrence(name,mut
 
 After applying a fix, trigger a personal build to verify. See the **REST API Guide**, Part 2 for how to use `teamcity_rest_post` to trigger and monitor builds.
 
+**Tip: use `branchName` to run builds from a feature branch.** TeamCity picks up Kotlin DSL settings from that branch too, so you can iterate on build configuration changes without committing to the main branch. This is especially useful when debugging build steps, parameters, or dependency settings — push to a branch, trigger a personal build on it, and verify without affecting others.
+
 ---
 
 # Common Scenarios

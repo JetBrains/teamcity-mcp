@@ -126,56 +126,33 @@ Default: 10 items from offset 0. Maximum page size: 100.
 
 ## Common Task Patterns
 
-### Worked example: "Why did build 48231 fail?"
+### "Why did build 48231 fail?"
 
-A typical investigation follows these steps: build overview → build problems → problem logs → test failures → test logs.
+Quick overview → problems → tests → log. For a comprehensive methodology (build chains, failed-to-start, root cause analysis), see the **Build Failure Analysis Guide**.
 
-**Step 1** — Get build overview:
 ```
+# 1. Build overview — statusText often tells you what failed
 path: /app/rest/builds/id:48231
 query: fields=id,number,status,statusText
-```
-Response: `{"id":48231,"number":"153","status":"FAILURE","statusText":"Tests failed: 3 (2 new), exit code 1 (Step: Compile)"}`
 
-The `statusText` tells you what kind of failure: test failures, build step errors, or both.
-
-**Step 2** — Get build problems with details and log anchors:
-```
+# 2. Build problems — always include details and logAnchor (excluded by default)
 path: /app/rest/builds/id:48231/problemOccurrences
 query: fields=problemOccurrence(id,type,details,logAnchor)
-```
-Response: `{"count":2,"problemOccurrence":[{"id":"problem:(id:123),build:(id:48231)","type":"TC_EXIT_CODE","details":"Process exited with code 1 (Step: Compile)","logAnchor":"340"},{"id":"problem:(id:456),build:(id:48231)","type":"TC_FAILED_TESTS","details":"3 tests failed"}]}`
 
-**Important**: `details` and `logAnchor` are not returned by default — you must request them explicitly in `fields`.
-`logAnchor` is a build log message index pointing to where the problem occurred.
-
-**Step 3** — View build log around the problem anchor:
-```
+# 3. Log around the problem — start before logAnchor to see the lead-up
 tool: teamcity_build_log
-buildId: 48231
-start: 340
-count: 30
-```
-This jumps directly to the Compile step failure in the log, showing surrounding context.
+buildId: 48231, start: 310, count: 60
 
-**Step 4** — Get test failures with details:
-```
+# 4. Test failures — include details, newFailure, logAnchor (excluded by default)
 path: /app/rest/builds/id:48231/testOccurrences
 query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
-```
-Response: `{"count":3,"testOccurrence":[{"name":"com.example.AuthTest.testLogin","status":"FAILURE","details":"Expected 200 but got 401","newFailure":true,"logAnchor":"512"},...]}`
 
-**Important**: `details` (stacktrace/stdout/stderr), `newFailure`, and `logAnchor` must be explicitly requested in `fields`.
-`newFailure: true` means this test was passing before — focus on these first.
-
-**Step 5** — If test `details` aren't sufficient, view the log around a test anchor:
-```
+# 5. Log around a test — start before logAnchor for setup context
 tool: teamcity_build_log
-buildId: 48231
-start: 512
-count: 50
+buildId: 48231, start: 490, count: 70
 ```
-This shows the build log output surrounding the test execution, which may include stdout, setup steps, or other context not captured in `details`.
+
+**Key**: `details`, `logAnchor`, and `newFailure` are **not returned by default** — always include them in `fields`. `newFailure: true` means the test was passing before — focus on these first.
 
 ### Finding entities by name
 
@@ -202,7 +179,7 @@ query: locator=project:(id:MyProject)&fields=buildType(id,name)
 ### "Find failing tests"
 ```
 path: /app/rest/testOccurrences
-query: locator=currentlyFailing:true,affectedProject:(id:PROJECT_ID)&fields=testOccurrence(name,details,build(buildType(id)))
+query: locator=currentlyFailing:true,affectedProject:(id:PROJECT_ID)&fields=testOccurrence(name,details,logAnchor,build(buildType(id)))
 ```
 
 ### "How long do builds take?"
@@ -496,7 +473,7 @@ query: fields=id,number,status,state,statusText,percentageComplete
 ```
 tool: teamcity_rest_get
 path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,details)
+query: locator=status:FAILURE&fields=testOccurrence(name,details,logAnchor)
 ```
 
 ## POST Response Format
@@ -584,38 +561,18 @@ filter: errors
 ```
 Returns only FAILURE and ERROR messages — the fastest way to see what went wrong.
 
-### Jump to a build problem in the log
+### Jump to a specific log location using logAnchor
 
-Use `logAnchor` from `problemOccurrences` as the `start` parameter:
+Use `logAnchor` from `problemOccurrences` or `testOccurrences` as the `start` parameter. Start a bit before the anchor (30-50 messages) to see what led to the failure:
 ```
-tool: teamcity_rest_get
-path: /app/rest/builds/id:19501/problemOccurrences
-query: fields=problemOccurrence(type,details,logAnchor)
-→ logAnchor: "340"
+# logAnchor from problemOccurrences: "340"
+buildId: 19501, start: 310, count: 60
 
-tool: teamcity_build_log
-buildId: 19501, start: 340, count: 30
-→ shows the log around the problem
+# logAnchor from testOccurrences: "512"
+buildId: 19501, start: 490, count: 70
 ```
 
-### Jump to a test failure in the log
-
-Use `logAnchor` from `testOccurrences` as the `start` parameter:
-```
-tool: teamcity_rest_get
-path: /app/rest/builds/id:19501/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,details,logAnchor)
-→ logAnchor: "512"
-
-tool: teamcity_build_log
-buildId: 19501, start: 512, count: 50
-→ shows the log around the test execution
-```
-This is useful when `details` (stacktrace) isn't enough and you need surrounding build output.
-
-### Full investigation workflow
-
-See Part 1 "Why did build 48231 fail?" for the complete step-by-step investigation combining build overview, build problems, problem logs, test failures, and test logs.
+For a full build failure investigation methodology, see the **Build Failure Analysis Guide**.
 
 ## Tips
 

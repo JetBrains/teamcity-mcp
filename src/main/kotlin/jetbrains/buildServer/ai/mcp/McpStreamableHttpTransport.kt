@@ -38,11 +38,15 @@ class McpStreamableHttpTransport(
     companion object {
         private val LOGGER = Logger.getInstance(McpStreamableHttpTransport::class.java.name)
 
-        // Maximum session lifetime to prevent zombie connections (15 min default)
-        const val DEFAULT_MAX_SESSION_DURATION_MS = 15 * 60 * 1000L
+        // Maximum session lifetime to prevent zombie connections (120 min default).
+        // Coding sessions routinely last 1-2 hours, and most MCP clients (Claude Code,
+        // Claude Desktop) do NOT auto-reconnect, so expiring too early forces manual intervention.
+        const val DEFAULT_MAX_SESSION_DURATION_MS = 120 * 60 * 1000L
 
-        // Client idle timeout - close if client doesn't send messages (5 min default)
-        const val DEFAULT_CLIENT_IDLE_TIMEOUT_MS = 5 * 60 * 1000L
+        // Client idle timeout - close if client doesn't send messages (30 min default).
+        // Users frequently pause for 10-20+ min while thinking, reviewing, or writing code.
+        // Since agents don't auto-reconnect on session expiry, we must be generous.
+        const val DEFAULT_CLIENT_IDLE_TIMEOUT_MS = 30 * 60 * 1000L
     }
 
     private val open = AtomicBoolean(false)

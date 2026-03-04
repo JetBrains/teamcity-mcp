@@ -660,7 +660,7 @@ private fun getCloseTimeoutMs(): Long =
 
 private fun getRequestTimeoutMs(): Long {
     val rawRequestTimeoutMs = TeamCityProperties
-        .getInteger("teamcity.ai.mcp.request.timeoutSec", 30)
+        .getInteger("teamcity.ai.mcp.request.timeoutSec", 60)
         .coerceAtLeast(1) * 1000L
     return max(rawRequestTimeoutMs, getCloseTimeoutMs() + 1000L)
 }
@@ -674,12 +674,12 @@ private fun getDestroyTimeoutMs(): Long {
 
 private fun getClientIdleTimeoutMs(): Long =
     TeamCityProperties
-        .getLong("teamcity.ai.mcp.clientIdleTimeoutMin", 5)
+        .getLong("teamcity.ai.mcp.clientIdleTimeoutMin", 30)
         .coerceAtLeast(1) * 60 * 1000L
 
 private fun getMaxSessionDurationMs(): Long {
     val rawMaxSessionDurationMs = TeamCityProperties
-        .getLong("teamcity.ai.mcp.maxSessionDurationMin", 30)
+        .getLong("teamcity.ai.mcp.maxSessionDurationMin", 120)
         .coerceAtLeast(1) * 60 * 1000L
     return max(rawMaxSessionDurationMs, getClientIdleTimeoutMs())
 }

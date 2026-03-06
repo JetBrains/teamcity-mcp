@@ -6,52 +6,33 @@ import kotlinx.coroutines.withContext
 import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
-
-data class ServletForwardContext(
-    val request: HttpServletRequest,
-    val response: HttpServletResponse
-)
 
 @Component
 class McpToolExecutionContext {
 
-    suspend fun <T> withServletForwardContext(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        block: suspend () -> T
-    ): T {
-        return withContext(ServletForwardContextElement(ServletForwardContext(request, response))) {
-            block()
-        }
-    }
-
     suspend fun <T> withOperationContext(
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse,
+        authorizationHeader: String?,
         capturedSecurityContext: SecurityContext = SecurityContextHolder.getContext(),
         block: suspend () -> T
     ): T {
         return withContext(
-            SecurityContextElement(capturedSecurityContext) +
-                    ServletForwardContextElement(ServletForwardContext(servletRequest, servletResponse))
+            SecurityContextElement(capturedSecurityContext) + AuthorizationHeaderElement(authorizationHeader)
         ) {
             block()
         }
     }
 
-    suspend fun currentServletForwardContext(): ServletForwardContext? {
-        return currentCoroutineContext()[ServletForwardContextElement]?.forwardContext
+    suspend fun currentAuthorizationHeader(): String? {
+        return currentCoroutineContext()[AuthorizationHeaderElement]?.header
     }
 }
 
-private class ServletForwardContextElement(
-    val forwardContext: ServletForwardContext
+private class AuthorizationHeaderElement(
+    val header: String?
 ) : AbstractCoroutineContextElement(Key) {
-    companion object Key : CoroutineContext.Key<ServletForwardContextElement>
+    companion object Key : CoroutineContext.Key<AuthorizationHeaderElement>
 }
 
 

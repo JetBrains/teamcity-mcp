@@ -25,7 +25,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.time.Duration.Companion.seconds
@@ -94,8 +93,7 @@ class McpStreamableHttpController(
         @RequestHeader(ACCEPT_HEADER, required = false) accept: String?,
         @RequestHeader(CONTENT_TYPE_HEADER) contentType: String,
         @RequestBody body: String,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse
+        servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
         if (!settingsService.isMcpServerEnabled()) {
             throwUnavailable()
@@ -144,13 +142,13 @@ class McpStreamableHttpController(
         }
 
         return if (isInitialize && sessionId == null) {
-            handleInitializePost(body, messageJson, servletRequest, servletResponse)
+            handleInitializePost(body, messageJson, servletRequest)
         } else if (sessionId != null) {
             val isRequest = isRequest(messageJson)
             if (isRequest) {
-                handleRequestPost(sessionId, body, messageJson, servletRequest, servletResponse)
+                handleRequestPost(sessionId, body, messageJson, servletRequest)
             } else {
-                handleNotificationPost(sessionId, body, messageJson, servletRequest, servletResponse)
+                handleNotificationPost(sessionId, body, messageJson, servletRequest)
             }
         } else {
             throw ResponseStatusException(
@@ -163,8 +161,7 @@ class McpStreamableHttpController(
     private fun <T> launchDeferred(
         coroutineName: String,
         logContext: String,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse,
+        authorizationHeader: String?,
         capturedSecurityContext: SecurityContext = SecurityContextHolder.getContext(),
         block: suspend (DeferredResult<ResponseEntity<T>>) -> Unit
     ): DeferredResult<ResponseEntity<T>> {
@@ -179,10 +176,8 @@ class McpStreamableHttpController(
         }
         job.set(launch(CoroutineName(coroutineName)) {
             try {
-                // Here we basically propagate SecurityContext and original servletRequest/servletResponse to the coroutine to be used by tools
                 toolExecutionContext.withOperationContext(
-                    servletRequest = servletRequest,
-                    servletResponse = servletResponse,
+                    authorizationHeader = authorizationHeader,
                     capturedSecurityContext = capturedSecurityContext
                 ) {
                     block(result)
@@ -217,8 +212,7 @@ class McpStreamableHttpController(
     private fun handleInitializePost(
         body: String,
         messageJson: JsonObject,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse
+        servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
         val requestId = extractRequestId(messageJson)
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing or invalid 'id' in initialize request")
@@ -227,8 +221,7 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "POST init",
             logContext = "POST initialize requestId=${requestId.displayValue()}",
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val newSessionId = Uuid.random().toString()
             LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: $clientInfo)")
@@ -265,8 +258,7 @@ class McpStreamableHttpController(
         sessionId: String,
         body: String,
         messageJson: JsonObject,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse
+        servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
         val requestId = extractRequestId(messageJson) ?: throw ResponseStatusException(
             HttpStatus.BAD_REQUEST,
@@ -276,8 +268,7 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "POST request $sessionId/${requestId.displayValue()}",
             logContext = "POST request sessionId=$sessionId requestId=${requestId.displayValue()}",
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val session = getOrCreateSession(sessionId)
             val responseDeferred = session.captureResponse(requestId)
@@ -307,14 +298,12 @@ class McpStreamableHttpController(
         sessionId: String,
         body: String,
         messageJson: JsonObject,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse
+        servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
         return launchDeferred(
             coroutineName = "POST notif $sessionId",
             logContext = "POST notification sessionId=$sessionId",
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val session = getOrCreateSession(sessionId)
             session.handlePostMessage(body)
@@ -350,8 +339,7 @@ class McpStreamableHttpController(
     @DeleteMapping
     fun handleDelete(
         @RequestHeader(SESSION_ID_HEADER, required = false) sessionId: String?,
-        servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse
+        servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<Void>> {
         if (!settingsService.isMcpServerEnabled()) {
             throwUnavailable()
@@ -369,8 +357,7 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "DELETE $sessionId",
             logContext = "DELETE sessionId=$sessionId",
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             try {
                 when (terminateSession(sessionId, "client request")) {

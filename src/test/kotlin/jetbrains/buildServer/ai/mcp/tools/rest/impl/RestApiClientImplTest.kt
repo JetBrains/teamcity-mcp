@@ -7,32 +7,13 @@ import jetbrains.buildServer.ServerUrlProvider
 import jetbrains.buildServer.util.HTTPRequestBuilder
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 class RestApiClientImplTest {
 
     private val requestHandler = mockk<HTTPRequestBuilder.RequestHandler>()
     private val serverUrlProvider = mockk<ServerUrlProvider>().also {
         every { it.rootUrl } returns "http://localhost:8111"
-    }
-
-    @Test
-    fun `get fails when servlet context is not bound`() {
-        val client = RestApiClientImpl(McpToolExecutionContext(), requestHandler, serverUrlProvider)
-
-        val ex = assertThrows(IllegalStateException::class.java) {
-            runBlocking {
-                client.get("/app/rest/server", "fields=count")
-            }
-        }
-
-        assertEquals(
-            "Servlet forwarding context is not available for this tool execution",
-            ex.message
-        )
     }
 
     @Test
@@ -44,11 +25,9 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
         val result = runBlocking {
-            context.withServletForwardContext(request, response) {
+            context.withOperationContext(authorizationHeader = "Bearer test-token") {
                 RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "fields=count")
             }
         }
@@ -67,11 +46,9 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
         val result = runBlocking {
-            context.withServletForwardContext(request, response) {
+            context.withOperationContext(authorizationHeader = "Bearer test-token") {
                 RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/missing", "")
             }
         }
@@ -89,34 +66,16 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
-        assertThrows(RuntimeException::class.java) {
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException::class.java) {
             runBlocking {
-                context.withServletForwardContext(request, response) {
+                context.withOperationContext(authorizationHeader = "Bearer test-token") {
                     RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "")
                 }
             }
         }
 
         verify { httpResponse.close() }
-    }
-
-    @Test
-    fun `post fails when servlet context is not bound`() {
-        val client = RestApiClientImpl(McpToolExecutionContext(), requestHandler, serverUrlProvider)
-
-        val ex = assertThrows(IllegalStateException::class.java) {
-            runBlocking {
-                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
-            }
-        }
-
-        assertEquals(
-            "Servlet forwarding context is not available for this tool execution",
-            ex.message
-        )
     }
 
     @Test
@@ -128,11 +87,9 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
         val result = runBlocking {
-            context.withServletForwardContext(request, response) {
+            context.withOperationContext(authorizationHeader = "Bearer test-token") {
                 RestApiClientImpl(context, requestHandler, serverUrlProvider)
                     .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
             }
@@ -152,11 +109,9 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
         val result = runBlocking {
-            context.withServletForwardContext(request, response) {
+            context.withOperationContext(authorizationHeader = "Bearer test-token") {
                 RestApiClientImpl(context, requestHandler, serverUrlProvider)
                     .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
             }
@@ -175,12 +130,10 @@ class RestApiClientImplTest {
         every { requestHandler.doSyncRequest(any()) } returns httpResponse
 
         val context = McpToolExecutionContext()
-        val request = mockServletRequest()
-        val response = mockk<HttpServletResponse>(relaxed = true)
 
-        assertThrows(RuntimeException::class.java) {
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException::class.java) {
             runBlocking {
-                context.withServletForwardContext(request, response) {
+                context.withOperationContext(authorizationHeader = "Bearer test-token") {
                     RestApiClientImpl(context, requestHandler, serverUrlProvider)
                         .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
                 }
@@ -190,9 +143,22 @@ class RestApiClientImplTest {
         verify { httpResponse.close() }
     }
 
-    private fun mockServletRequest(): HttpServletRequest {
-        val request = mockk<HttpServletRequest>()
-        every { request.getHeader("Authorization") } returns "Bearer test-token"
-        return request
+    @Test
+    fun `get works without authorization header`() {
+        val httpResponse = mockk<HTTPRequestBuilder.Response>()
+        every { httpResponse.statusCode } returns 200
+        every { httpResponse.bodyAsString } returns """{"ok":true}"""
+        every { httpResponse.close() } returns Unit
+        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+
+        val context = McpToolExecutionContext()
+
+        val result = runBlocking {
+            context.withOperationContext(authorizationHeader = null) {
+                RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "")
+            }
+        }
+
+        assertEquals(200, result.statusCode)
     }
 }

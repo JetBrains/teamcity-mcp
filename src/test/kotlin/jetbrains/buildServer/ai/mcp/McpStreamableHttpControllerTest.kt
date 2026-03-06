@@ -18,7 +18,6 @@ import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.server.ResponseStatusException
 import java.util.Collections
 import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 class McpStreamableHttpControllerTest {
 
@@ -763,25 +762,21 @@ class McpStreamableHttpControllerTest {
         body: String
     ): DeferredResult<ResponseEntity<String>> {
         val servletRequest = mockk<HttpServletRequest>(relaxed = true)
-        val servletResponse = mockk<HttpServletResponse>(relaxed = true)
         return controller.handlePost(
             protocolVersion = protocolVersion,
             sessionId = sessionId,
             accept = accept,
             contentType = contentType,
             body = body,
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            servletRequest = servletRequest
         )
     }
 
     private fun delete(sessionId: String?): DeferredResult<ResponseEntity<Void>> {
         val servletRequest = mockk<HttpServletRequest>(relaxed = true)
-        val servletResponse = mockk<HttpServletResponse>(relaxed = true)
         return controller.handleDelete(
             sessionId = sessionId,
-            servletRequest = servletRequest,
-            servletResponse = servletResponse
+            servletRequest = servletRequest
         )
     }
 

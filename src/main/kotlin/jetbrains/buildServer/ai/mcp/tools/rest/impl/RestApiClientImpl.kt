@@ -34,10 +34,8 @@ class RestApiClientImpl(
         query: String,
         body: String? = null
     ): RestApiResponse {
-        val forwardContext = executionContext.currentServletForwardContext()
-            ?: error("Servlet forwarding context is not available for this tool execution")
+        val authHeader = executionContext.currentAuthorizationHeader()
 
-        val originalRequest = forwardContext.request
         val baseUrl = serverUrlProvider.rootUrl.trimEnd('/')
         val sanitizedQuery = RestToolUtils.sanitizeQuery(query)
         val url = if (sanitizedQuery.isBlank()) "$baseUrl$path" else "$baseUrl$path?$sanitizedQuery"
@@ -52,7 +50,7 @@ class RestApiClientImpl(
             builder.withPostStringEntity(body, "application/json", Charsets.UTF_8)
         }
 
-        originalRequest.getHeader("Authorization")?.let {
+        authHeader?.let {
             builder.withHeader("Authorization", it)
         }
 

@@ -2,13 +2,12 @@ package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 class McpToolExecutionContextTest {
 
@@ -24,12 +23,9 @@ class McpToolExecutionContextTest {
         val captured = SecurityContextHolder.createEmptyContext().also {
             it.authentication = mockk<Authentication>(relaxed = true)
         }
-        val request = mockk<HttpServletRequest>()
-        val response = mockk<HttpServletResponse>()
 
         executionContext.withOperationContext(
-            servletRequest = request,
-            servletResponse = response,
+            authorizationHeader = null,
             capturedSecurityContext = captured
         ) {
             assertSame(captured, SecurityContextHolder.getContext())
@@ -40,24 +36,19 @@ class McpToolExecutionContextTest {
     }
 
     @Test
-    fun `withOperationContext binds servlet forwarding context`() = runBlocking {
+    fun `withOperationContext binds authorization header`() = runBlocking {
         val executionContext = McpToolExecutionContext()
-        val request = mockk<HttpServletRequest>()
-        val response = mockk<HttpServletResponse>()
 
         executionContext.withOperationContext(
-            servletRequest = request,
-            servletResponse = response
+            authorizationHeader = "Bearer test-token"
         ) {
-            val ctx = executionContext.currentServletForwardContext()
-            assertSame(request, ctx!!.request)
-            assertSame(response, ctx.response)
+            assertEquals("Bearer test-token", executionContext.currentAuthorizationHeader())
         }
     }
 
     @Test
-    fun `current servlet forwarding context is absent outside operation context`() = runBlocking {
+    fun `current authorization header is null outside operation context`() = runBlocking {
         val executionContext = McpToolExecutionContext()
-        assertNull(executionContext.currentServletForwardContext())
+        assertNull(executionContext.currentAuthorizationHeader())
     }
 }

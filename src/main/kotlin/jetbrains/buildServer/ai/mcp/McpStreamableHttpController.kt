@@ -97,11 +97,11 @@ class McpStreamableHttpController(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): DeferredResult<ResponseEntity<String>> {
-        logIncomingRequest(LOGGER, "POST", servletRequest, body)
-
         if (!settingsService.isMcpServerEnabled()) {
             throwUnavailable()
         }
+
+        logIncomingRequest(LOGGER, "POST", servletRequest, body)
 
         val contentTypeNormalized = contentType.substringBefore(";").trim().lowercase()
         if (contentTypeNormalized != APPLICATION_JSON) {
@@ -119,6 +119,12 @@ class McpStreamableHttpController(
         }
 
         val isInitialize = isInitializeRequest(messageJson)
+
+        if (isInitialize) {
+            val clientInfo = extractClientInfo(messageJson)
+            LOGGER.info("Initialize request received: protocolVersion=$protocolVersion, clientInfo=$clientInfo")
+            eventBus.emit(McpEvent.InitializeRequested(protocolVersion, clientInfo))
+        }
 
         validateProtocolVersion(protocolVersion)
         validateAcceptHeader(accept)
@@ -228,6 +234,7 @@ class McpStreamableHttpController(
             LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: $clientInfo)")
 
             val transport = createSession(newSessionId)
+
             val responseDeferred = transport.captureResponse(requestId)
             try {
                 transport.handlePostMessage(body)
@@ -330,6 +337,9 @@ class McpStreamableHttpController(
         @RequestHeader("User-Agent", required = false) userAgent: String?,
         servletRequest: HttpServletRequest
     ): ResponseEntity<Void> {
+        if (!settingsService.isMcpServerEnabled()) {
+            throwUnavailable()
+        }
         logIncomingRequest(LOGGER, "GET", servletRequest)
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
     }
@@ -343,11 +353,12 @@ class McpStreamableHttpController(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): DeferredResult<ResponseEntity<Void>> {
-        logIncomingRequest(LOGGER, "DELETE", servletRequest)
-
         if (!settingsService.isMcpServerEnabled()) {
             throwUnavailable()
         }
+
+        logIncomingRequest(LOGGER, "DELETE", servletRequest)
+
         if (sessionId == null) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,

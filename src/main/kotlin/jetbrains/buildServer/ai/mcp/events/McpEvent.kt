@@ -5,6 +5,13 @@ import java.time.Instant
 sealed class McpEvent {
     abstract val timestamp: Instant
 
+    /** An initialize request was received from a client (before validation). */
+    data class InitializeRequested(
+        val protocolVersion: String?,
+        val clientInfo: String?,
+        override val timestamp: Instant = Instant.now()
+    ) : McpEvent()
+
     /** A new client session has been initialised and the MCP server is connected. */
     data class SessionStarted(
         val sessionId: String,

@@ -1,6 +1,7 @@
 package jetbrains.buildServer.ai.mcp
 
 import io.mockk.*
+import jetbrains.buildServer.ai.mcp.events.McpEvent
 import jetbrains.buildServer.ai.mcp.events.McpEventBus
 import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -147,7 +148,6 @@ class McpStreamableHttpControllerTest {
         val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
         every { sessionManager.getSession(sessionId) } returns transport
 
-        // Accept must include both application/json and text/event-stream
         val result = post(
             protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
             sessionId = sessionId,
@@ -393,7 +393,6 @@ class McpStreamableHttpControllerTest {
         )
 
         assertTrue(result is DeferredResult<*>)
-        // Verify session was created and registered
         coVerify(timeout = 2_000) { sessionManager.registerSession(match { it.sessionId == "unknown" }) }
     }
 
@@ -429,7 +428,6 @@ class McpStreamableHttpControllerTest {
 
         val status = awaitErrorStatus(result)
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
-        // Verify cleanup was attempted
         verify(timeout = 2_000) { sessionManager.removeSession("unknown") }
     }
 
@@ -543,11 +541,6 @@ class McpStreamableHttpControllerTest {
 
     @Test
     fun `POST initialize without protocol version is accepted`() {
-        // For initialize, protocol version is not required — the controller passes required=false
-        // This should not throw a protocol version error but should fail later on notification path
-        // because sessionId is null and it's not an initialize
-        // Actually, for initialize: isInitialize=true → validateProtocolVersion(required=false)
-        // So missing protocol version is OK for initialize
         val result = post(
             protocolVersion = null,
             sessionId = null,
@@ -556,8 +549,6 @@ class McpStreamableHttpControllerTest {
             body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}"""
         )
 
-        // Should return DeferredResult (actual init will fail due to mocked configurator,
-        // but the point is it didn't throw on missing protocol version)
         assertTrue(result is DeferredResult<*>)
     }
 
@@ -617,6 +608,151 @@ class McpStreamableHttpControllerTest {
 
         val status = awaitErrorStatus(result)
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
+    }
+
+    @Test
+    fun `POST initialize emits SessionStarted when createSession succeeds`() {
+        mockServerConfigurator()
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = null,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}"""
+        )
+
+        // Wait for async flow (will error since mock server can't handle init)
+        awaitErrorStatus(result)
+
+        verify(timeout = 2_000) {
+            eventBus.emit(match { it is McpEvent.SessionStarted })
+        }
+    }
+
+    @Test
+    fun `POST initialize does not emit SessionStarted when createSession itself fails`() {
+        every { serverConfigurator.configureServer() } throws RuntimeException("config failed")
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = null,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}"""
+        )
+
+        awaitErrorStatus(result)
+
+        verify(exactly = 0) {
+            eventBus.emit(match { it is McpEvent.SessionStarted })
+        }
+    }
+
+    // --- SessionClosed emitted on termination ---
+
+    @Test
+    fun `DELETE emits SessionClosed when session is found and terminated`() {
+        val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
+        every { transport.sessionId } returns "s1"
+        every { sessionManager.removeSession("s1") } returns transport
+
+        val result = delete(sessionId = "s1")
+
+        val deadline = System.currentTimeMillis() + 2_000
+        while (!result.hasResult() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
+
+        verify(timeout = 2_000) {
+            eventBus.emit(match {
+                it is McpEvent.SessionClosed &&
+                it.sessionId == "s1" &&
+                it.reason == "client request"
+            })
+        }
+    }
+
+    // --- InitializeRequested event ---
+
+    @Test
+    fun `POST initialize emits InitializeRequested event with protocol version and client info`() {
+        mockServerConfigurator()
+
+        post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = null,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0"}}}"""
+        )
+
+        verify {
+            eventBus.emit(match {
+                it is McpEvent.InitializeRequested &&
+                it.protocolVersion == "2025-11-25" &&
+                it.clientInfo != null && it.clientInfo!!.contains("test-client")
+            })
+        }
+    }
+
+    @Test
+    fun `POST initialize emits InitializeRequested event even when validation rejects the request`() {
+        assertThrows<ResponseStatusException> {
+            post(
+                protocolVersion = "1999-01-01",
+                sessionId = null,
+                accept = "application/json, text/event-stream",
+                contentType = "application/json",
+                body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"bad-client","version":"0.1"}}}"""
+            )
+        }
+
+        verify {
+            eventBus.emit(match {
+                it is McpEvent.InitializeRequested &&
+                it.protocolVersion == "1999-01-01" &&
+                it.clientInfo != null && it.clientInfo!!.contains("bad-client")
+            })
+        }
+    }
+
+    @Test
+    fun `POST initialize emits InitializeRequested event even when accept header is rejected`() {
+        assertThrows<ResponseStatusException> {
+            post(
+                protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+                sessionId = null,
+                accept = "text/plain",
+                contentType = "application/json",
+                body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}"""
+            )
+        }
+
+        verify {
+            eventBus.emit(match {
+                it is McpEvent.InitializeRequested &&
+                it.protocolVersion == "2025-11-25"
+            })
+        }
+    }
+
+    @Test
+    fun `POST non-initialize request does not emit InitializeRequested event`() {
+        val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
+        every { sessionManager.getSession("s1") } returns transport
+
+        post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "s1",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
+
+        verify(exactly = 0) {
+            eventBus.emit(match { it is McpEvent.InitializeRequested })
+        }
     }
 
     private fun post(

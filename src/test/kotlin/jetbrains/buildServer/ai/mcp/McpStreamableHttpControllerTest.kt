@@ -648,6 +648,34 @@ class McpStreamableHttpControllerTest {
         }
     }
 
+    @Test
+    fun `POST initialize failure after session start emits SessionClosed`() {
+        mockServerConfigurator()
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = null,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}"""
+        )
+
+        awaitErrorStatus(result)
+
+        verify(timeout = 2_000) {
+            eventBus.emit(match {
+                it is McpEvent.SessionStarted
+            })
+        }
+
+        verify(timeout = 2_000) {
+            eventBus.emit(match {
+                it is McpEvent.SessionClosed &&
+                    (it.reason == "Initialize request failed" || it.reason == "Initialize request cancelled")
+            })
+        }
+    }
+
     // --- SessionClosed emitted on termination ---
 
     @Test
@@ -668,6 +696,27 @@ class McpStreamableHttpControllerTest {
                 it is McpEvent.SessionClosed &&
                 it.sessionId == "s1" &&
                 it.reason == "client request"
+            })
+        }
+    }
+
+    @Test
+    fun `destroy emits SessionClosed for all active sessions`() {
+        val transport1 = mockk<McpStreamableHttpTransport>(relaxed = true)
+        val transport2 = mockk<McpStreamableHttpTransport>(relaxed = true)
+        every { transport1.sessionId } returns "s1"
+        every { transport2.sessionId } returns "s2"
+        every { sessionManager.getAllSessionIds() } returns setOf("s1", "s2")
+        every { sessionManager.removeSession("s1") } returns transport1
+        every { sessionManager.removeSession("s2") } returns transport2
+
+        controller.destroy()
+
+        verify(exactly = 2) {
+            eventBus.emit(match {
+                it is McpEvent.SessionClosed &&
+                    it.reason == "controller destroy" &&
+                    (it.sessionId == "s1" || it.sessionId == "s2")
             })
         }
     }

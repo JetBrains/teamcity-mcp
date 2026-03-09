@@ -174,9 +174,9 @@ class RestGetToolTest {
             val client = CapturingClient()
             tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "?start=0&count=10&fields=count")
+                put("query", "?locator=start:0,count:10&fields=count")
             })
-            Assertions.assertEquals("start=0&count=10&fields=count", client.capturedQuery)
+            Assertions.assertEquals("locator=start:0,count:10&fields=count", client.capturedQuery)
         }
     }
 
@@ -187,35 +187,40 @@ class RestGetToolTest {
     @Nested
     inner class PaginationEnforcement {
 
+        // --- Locator-only pagination: count and start must always be in the locator ---
+
         @Test
-        fun `empty query gets default pagination`() {
+        fun `empty query gets locator with default pagination`() {
             val result = tool().ensurePaging("")
             Assertions.assertTrue(result.enforced)
-            Assertions.assertTrue(result.query.contains("start=0"))
-            Assertions.assertTrue(result.query.contains("count=${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("locator="))
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            // Must NOT have top-level start= or count=
+            val params = result.query.split("&").map { it.substringBefore("=") }
+            Assertions.assertFalse(params.contains("start"))
+            Assertions.assertFalse(params.contains("count"))
             Assertions.assertNotNull(result.note)
         }
 
         @Test
-        fun `query without pagination gets defaults appended`() {
+        fun `query with fields only gets locator with default pagination`() {
             val result = tool().ensurePaging("fields=build(id)")
             Assertions.assertTrue(result.enforced)
-            Assertions.assertTrue(result.query.startsWith("fields=build(id)"))
-            Assertions.assertTrue(result.query.contains("start=0"))
-            Assertions.assertTrue(result.query.contains("count=${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("locator=start:0,count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("fields=build(id)"))
         }
 
         @Test
-        fun `query with both start and count is not modified`() {
-            val original = "start=5&count=20&fields=build(id)"
-            val result = tool().ensurePaging(original)
-            Assertions.assertFalse(result.enforced)
-            Assertions.assertEquals(original, result.query)
-            Assertions.assertEquals(null, result.note)
+        fun `existing locator without pagination gets count and start appended`() {
+            val result = tool().ensurePaging("locator=buildType:(id:BT1)&fields=build(id)")
+            Assertions.assertTrue(result.enforced)
+            Assertions.assertTrue(result.query.contains("locator=buildType:(id:BT1),start:0,count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("fields=build(id)"))
         }
 
         @Test
-        fun `pagination in locator is detected`() {
+        fun `pagination in locator is detected and not modified`() {
             val original = "locator=buildType:(id:BT1),start:0,count:10&fields=build(id)"
             val result = tool().ensurePaging(original)
             Assertions.assertFalse(result.enforced)
@@ -223,43 +228,28 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `missing start with count present gets start added`() {
-            val result = tool().ensurePaging("count=10&fields=build(id)")
+        fun `locator with count but no start gets start added`() {
+            val result = tool().ensurePaging("locator=buildType:(id:BT1),count:10&fields=build(id)")
             Assertions.assertTrue(result.enforced)
-            Assertions.assertTrue(result.query.contains("start=0"))
-            Assertions.assertTrue(result.query.contains("count=10"))
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:10"))
         }
 
         @Test
-        fun `missing count with start present gets count added`() {
-            val result = tool().ensurePaging("start=5&fields=build(id)")
+        fun `locator with start but no count gets count added`() {
+            val result = tool().ensurePaging("locator=buildType:(id:BT1),start:5&fields=build(id)")
             Assertions.assertTrue(result.enforced)
-            Assertions.assertTrue(result.query.contains("start=5"))
-            Assertions.assertTrue(result.query.contains("count=${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("start:5"))
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
         }
 
         @Test
-        fun `start in locator and count as top level both detected`() {
-            val original = "locator=buildType:(id:BT1),start:0&count=10"
-            val result = tool().ensurePaging(original)
-            Assertions.assertFalse(result.enforced)
-            Assertions.assertEquals(original, result.query)
-        }
-
-        @Test
-        fun `count in locator and start as top level both detected`() {
-            val original = "start=0&locator=buildType:(id:BT1),count:10"
-            val result = tool().ensurePaging(original)
-            Assertions.assertFalse(result.enforced)
-            Assertions.assertEquals(original, result.query)
-        }
-
-        @Test
-        fun `whitespace-only query gets default pagination`() {
+        fun `whitespace-only query gets locator with default pagination`() {
             val result = tool().ensurePaging("   ")
             Assertions.assertTrue(result.enforced)
-            Assertions.assertTrue(result.query.contains("start=0"))
-            Assertions.assertTrue(result.query.contains("count=${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("locator="))
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
         }
 
         @Test
@@ -270,13 +260,91 @@ class RestGetToolTest {
             Assertions.assertEquals(original, result.query)
         }
 
+        // --- Top-level start/count migration into locator ---
+
         @Test
-        fun `count exceeding max is capped at top level`() {
-            val result = tool().ensurePaging("start=0&count=500&fields=build(id)")
-            Assertions.assertTrue(result.query.contains("count=${RestGetTool.MAX_PAGE_SIZE}"))
-            Assertions.assertFalse(result.query.contains("count=500"))
+        fun `top-level start and count are migrated into new locator`() {
+            val result = tool().ensurePaging("start=5&count=20&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("locator=start:5,count:20"))
+            Assertions.assertTrue(result.query.contains("fields=build(id)"))
+            // Must NOT have top-level start= or count=
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("start"))
+            Assertions.assertFalse(topLevelParams.contains("count"))
             Assertions.assertNotNull(result.note)
         }
+
+        @Test
+        fun `top-level start and count are migrated into existing locator`() {
+            val result = tool().ensurePaging("locator=buildType:(id:BT1)&start=5&count=20&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("locator=buildType:(id:BT1),start:5,count:20"))
+            Assertions.assertTrue(result.query.contains("fields=build(id)"))
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("start"))
+            Assertions.assertFalse(topLevelParams.contains("count"))
+        }
+
+        @Test
+        fun `top-level count only is migrated and start added`() {
+            val result = tool().ensurePaging("count=10&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:10"))
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("count"))
+        }
+
+        @Test
+        fun `top-level start only is migrated and count added`() {
+            val result = tool().ensurePaging("start=5&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("start:5"))
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("start"))
+        }
+
+        @Test
+        fun `top-level count with locator start stays in locator`() {
+            val result = tool().ensurePaging("locator=buildType:(id:BT1),start:0&count=10")
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:10"))
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("count"))
+        }
+
+        @Test
+        fun `top-level start with locator count stays in locator`() {
+            val result = tool().ensurePaging("start=0&locator=buildType:(id:BT1),count:10")
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:10"))
+            val topLevelParams = result.query.split("&")
+                .filter { !it.startsWith("locator=") }
+                .map { it.substringBefore("=") }
+            Assertions.assertFalse(topLevelParams.contains("start"))
+        }
+
+        @Test
+        fun `locator pagination takes precedence over duplicate top-level params`() {
+            // Locator already has start and count — top-level duplicates are stripped, not merged
+            val result = tool().ensurePaging("locator=buildType:(id:BT1),start:0,count:10&start=5&count=20&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:10"))
+            Assertions.assertFalse(result.query.contains("start:5"))
+            Assertions.assertFalse(result.query.contains("count:20"))
+            Assertions.assertFalse(result.query.contains("start="))
+            Assertions.assertFalse(result.query.contains("count="))
+        }
+
+        // --- Count capping ---
 
         @Test
         fun `count exceeding max is capped in locator`() {
@@ -287,22 +355,33 @@ class RestGetToolTest {
         }
 
         @Test
+        fun `top-level count exceeding max is migrated and capped`() {
+            val result = tool().ensurePaging("start=0&count=500&fields=build(id)")
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.MAX_PAGE_SIZE}"))
+            Assertions.assertFalse(result.query.contains("count=500"))
+            Assertions.assertFalse(result.query.contains("count:500"))
+            Assertions.assertNotNull(result.note)
+        }
+
+        @Test
         fun `count exceeding max capped end-to-end via client`() = runBlocking {
             val client = CapturingClient()
             tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=500&fields=build(id)")
+                put("query", "locator=buildType:(id:BT1),start:0,count:500&fields=build(id)")
             })
-            Assertions.assertTrue(client.capturedQuery!!.contains("count=${RestGetTool.MAX_PAGE_SIZE}"))
-            Assertions.assertFalse(client.capturedQuery!!.contains("count=500"))
+            Assertions.assertTrue(client.capturedQuery!!.contains("count:${RestGetTool.MAX_PAGE_SIZE}"))
+            Assertions.assertFalse(client.capturedQuery!!.contains("count:500"))
         }
 
         @Test
-        fun `count at max is not modified`() {
-            val original = "start=0&count=${RestGetTool.MAX_PAGE_SIZE}&fields=build(id)"
+        fun `count at max in locator is not modified`() {
+            val original = "locator=buildType:(id:BT1),start:0,count:${RestGetTool.MAX_PAGE_SIZE}&fields=build(id)"
             val result = tool().ensurePaging(original)
             Assertions.assertEquals(original, result.query)
         }
+
+        // --- Edge cases ---
 
         @Test
         fun `pagination not enforced for single-resource paths`() {
@@ -312,6 +391,13 @@ class RestGetToolTest {
             // This is harmless — single-resource endpoints ignore start/count.
             val result = tool().ensurePaging("fields=id,status")
             Assertions.assertTrue(result.enforced)
+        }
+
+        @Test
+        fun `migration note mentions deprecated top-level params`() {
+            val result = tool().ensurePaging("start=0&count=10&fields=build(id)")
+            Assertions.assertNotNull(result.note)
+            Assertions.assertTrue(result.note!!.contains("locator"))
         }
     }
 
@@ -330,25 +416,26 @@ class RestGetToolTest {
         }
 
         @Test
-        fun `passes pagination-enforced query to client`() = runBlocking {
+        fun `passes pagination-enforced query to client with locator`() = runBlocking {
             val client = CapturingClient()
             tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
                 put("query", "fields=build(id)")
             })
             Assertions.assertTrue(client.capturedQuery!!.contains("fields=build(id)"))
-            Assertions.assertTrue(client.capturedQuery!!.contains("start=0"))
-            Assertions.assertTrue(client.capturedQuery!!.contains("count="))
+            Assertions.assertTrue(client.capturedQuery!!.contains("locator="))
+            Assertions.assertTrue(client.capturedQuery!!.contains("start:0"))
+            Assertions.assertTrue(client.capturedQuery!!.contains("count:"))
         }
 
         @Test
-        fun `passes original query when pagination present`() = runBlocking {
+        fun `passes original query when pagination present in locator`() = runBlocking {
             val client = CapturingClient()
             tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=5&fields=build(id)")
+                put("query", "locator=start:0,count:5&fields=build(id)")
             })
-            Assertions.assertEquals("start=0&count=5&fields=build(id)", client.capturedQuery)
+            Assertions.assertEquals("locator=start:0,count:5&fields=build(id)", client.capturedQuery)
         }
 
         @Test
@@ -356,10 +443,10 @@ class RestGetToolTest {
             val client = CapturingClient()
             tool(client).execute(buildJsonObject {
                 put("path", "  /app/rest/builds  ")
-                put("query", "  start=0&count=5  ")
+                put("query", "  locator=start:0,count:5  ")
             })
             Assertions.assertEquals("/app/rest/builds", client.capturedPath)
-            Assertions.assertEquals("start=0&count=5", client.capturedQuery)
+            Assertions.assertEquals("locator=start:0,count:5", client.capturedQuery)
         }
     }
 
@@ -374,12 +461,12 @@ class RestGetToolTest {
         fun `response is structured json envelope for json endpoints`() = runBlocking {
             val result = tool(succeedingClient("""{"count":0}""")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=count")
+                put("query", "locator=start:0,count:10&fields=count")
             })
             Assertions.assertFalse(result.isError)
             val payload = parseResultJson(result.text)
             val meta = payload["meta"]!!.jsonObject
-            Assertions.assertEquals("/app/rest/builds?start=0&count=10&fields=count", meta["url"]!!.toString().trim('"'))
+            Assertions.assertEquals("/app/rest/builds?locator=start:0,count:10&fields=count", meta["url"]!!.toString().trim('"'))
             Assertions.assertEquals(200, meta["statusCode"]!!.toString().toInt())
             Assertions.assertEquals("application/json", payload["contentType"]!!.toString().trim('"'))
             Assertions.assertTrue(payload.containsKey("body"))
@@ -400,7 +487,7 @@ class RestGetToolTest {
         fun `response has empty notes array when no notes apply`() = runBlocking {
             val result = tool(succeedingClient("{}")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             Assertions.assertFalse(result.isError)
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray
@@ -412,7 +499,7 @@ class RestGetToolTest {
             val client = succeedingClient(body = """{"data":"..."}""", truncated = true)
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertTrue(notes.contains("truncated"))
@@ -420,10 +507,10 @@ class RestGetToolTest {
 
         @Test
         fun `response includes nextHref flag and note when present in json body`() = runBlocking {
-            val body = """{"count":10,"nextHref":"/app/rest/builds?start=10&count=10","build":[]}"""
+            val body = """{"count":10,"nextHref":"/app/rest/builds?locator=start:10,count:10","build":[]}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val meta = parseResultJson(result.text)["meta"]!!.jsonObject
             Assertions.assertEquals("true", meta["hasNextHref"]!!.toString())
@@ -436,7 +523,7 @@ class RestGetToolTest {
             val body = """{"count":42}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=count")
+                put("query", "locator=start:0,count:10&fields=count")
             })
             val payload = parseResultJson(result.text)
             val bodyNode = payload["body"]!!.jsonObject
@@ -448,7 +535,7 @@ class RestGetToolTest {
             val client = succeedingClient(body = """{"message":"Not found"}""", statusCode = 404)
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val meta = parseResultJson(result.text)["meta"]!!.jsonObject
             Assertions.assertEquals(404, meta["statusCode"]!!.toString().toInt())
@@ -458,7 +545,7 @@ class RestGetToolTest {
         fun `response includes missing-fields warning note when fields absent`() = runBlocking {
             val result = tool(succeedingClient("{}")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertTrue(notes.contains("No 'fields'"))
@@ -468,7 +555,7 @@ class RestGetToolTest {
         fun `no missing-fields warning when fields is present`() = runBlocking {
             val result = tool(succeedingClient("{}")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertFalse(notes.contains("No 'fields'"))
@@ -479,7 +566,7 @@ class RestGetToolTest {
             val body = """{"count":0,"build":[]}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertTrue(notes.contains("0 items"))
@@ -491,7 +578,7 @@ class RestGetToolTest {
             val body = """{"count":5,"build":[{"id":1,"testOccurrences":{"count":0}}]}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertFalse(notes.contains("0 items"))
@@ -502,7 +589,7 @@ class RestGetToolTest {
             val body = """{"count":5,"build":[{"id":1}]}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertFalse(notes.contains("0 items"))
@@ -513,7 +600,7 @@ class RestGetToolTest {
             val body = """{"count":3,"build":[{"id":1},{"id":2},{"id":3}]}"""
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val meta = parseResultJson(result.text)["meta"]!!.jsonObject
             Assertions.assertEquals("false", meta["hasNextHref"]!!.toString())
@@ -524,7 +611,7 @@ class RestGetToolTest {
             val body = "SUCCESS"
             val result = tool(succeedingClient(body)).execute(buildJsonObject {
                 put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             val payload = parseResultJson(result.text)
             Assertions.assertEquals("text/plain", payload["contentType"]!!.toString().trim('"'))
@@ -536,7 +623,7 @@ class RestGetToolTest {
         fun `plain text endpoint does not add missing fields note`() = runBlocking {
             val result = tool(succeedingClient("FAILURE")).execute(buildJsonObject {
                 put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
             Assertions.assertFalse(notes.contains("No 'fields'"))
@@ -546,7 +633,7 @@ class RestGetToolTest {
         fun `non plain text endpoint with non json body falls back to bodyText with note`() = runBlocking {
             val result = tool(succeedingClient("{invalid-json")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10&fields=build(id)")
+                put("query", "locator=start:0,count:10&fields=build(id)")
             })
             val payload = parseResultJson(result.text)
             val meta = payload["meta"]!!.jsonObject
@@ -560,7 +647,7 @@ class RestGetToolTest {
         fun `plain text endpoint keeps hasNextHref false even when text mentions nextHref`() = runBlocking {
             val result = tool(succeedingClient("line mentions nextHref here")).execute(buildJsonObject {
                 put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             val meta = parseResultJson(result.text)["meta"]!!.jsonObject
             Assertions.assertEquals("false", meta["hasNextHref"]!!.toString())
@@ -594,7 +681,7 @@ class RestGetToolTest {
             val client = throwingClient(IllegalStateException("timeout"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             Assertions.assertTrue(result.isError)
         }
@@ -604,7 +691,7 @@ class RestGetToolTest {
             val client = throwingClient(RestApiException(404, "Not Found", "Nothing here"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             Assertions.assertTrue(result.isError)
             Assertions.assertTrue(result.text.contains("404"))
@@ -616,7 +703,7 @@ class RestGetToolTest {
             val client = throwingClient(RestApiException(403, "Forbidden", "Access denied"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             Assertions.assertTrue(result.isError)
             Assertions.assertTrue(result.text.contains("403"))
@@ -628,7 +715,7 @@ class RestGetToolTest {
             val client = throwingClient(RestApiException(500, "Internal Server Error", "Oops"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             Assertions.assertTrue(result.isError)
             Assertions.assertTrue(result.text.contains("500"))
@@ -640,7 +727,7 @@ class RestGetToolTest {
             val client = throwingClient(RestApiException(400, "Bad Request", "Bad locator syntax"))
             val result = tool(client).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "start=0&count=10")
+                put("query", "locator=start:0,count:10")
             })
             Assertions.assertTrue(result.isError)
             Assertions.assertTrue(result.text.contains("400"))

@@ -69,7 +69,7 @@ class RestGetTool(
         |
         |For JSON endpoints, always use 'fields' to select only the data you need - this is critical for keeping responses manageable.
         |Some endpoints return plain text (e.g. /builds/aggregated/.../status), where 'fields' is not applicable.
-        |Always paginate with 'start' and 'count' (max $MAX_PAGE_SIZE). Use 'locator' to filter results server-side.
+        |Always paginate with 'start' and 'count' inside the locator (max $MAX_PAGE_SIZE). Do NOT use start/count as top-level query parameters — they are deprecated.
         |
         |Response format:
         |- Tool output is a JSON envelope with:
@@ -113,14 +113,14 @@ class RestGetTool(
                 put("type", "string")
                 put(
                     "description", """
-                    |Query parameters without leading '?'. Combine locator, fields, and pagination with '&'.
+                    |Query parameters without leading '?'. Combine locator and fields with '&'.
                     |
                     |Field selection (critical for manageable response size):
                     |  fields=build(id,number,status) - nested field selection
                     |  fields=count - get only the total count
                     |  Some endpoints (e.g. /builds/aggregated/.../status) return plain text, so 'fields' is not used there
                     |
-                    |Locator (server-side filtering):
+                    |Locator (server-side filtering and pagination):
                     |  locator=buildType:(id:MyBuild),status:SUCCESS,count:10
                     |
                     |Useful locator dimensions:
@@ -131,7 +131,7 @@ class RestGetTool(
                     |  branch:default:any - include all branches
                     |  defaultFilter:true - exclude personal and canceled builds (recommended)
                     |
-                    |Pagination: include start and count as top-level params (start=0&count=10) or inside locator (locator=...,start:0,count:10). Max count is $MAX_PAGE_SIZE. If omitted, start=0 and count=$DEFAULT_PAGE_SIZE are added automatically.
+                    |Pagination: always use start and count inside the locator (e.g. locator=...,start:0,count:10). Do NOT use start/count as top-level query parameters — they are deprecated and will be automatically migrated into the locator. Max count is $MAX_PAGE_SIZE. If omitted, start:0 and count:$DEFAULT_PAGE_SIZE are added to the locator automatically.
                     |
                     |Examples:
                     |  locator=buildType:(id:MyBuild),defaultFilter:true,count:10&fields=build(id,number,status,finishOnAgentDate)
@@ -176,42 +176,88 @@ class RestGetTool(
     internal fun ensurePaging(query: String): PagingResult {
         if (query.isBlank()) {
             return PagingResult(
-                query = "start=0&count=$DEFAULT_PAGE_SIZE",
+                query = "locator=start:0,count:$DEFAULT_PAGE_SIZE",
                 enforced = true,
                 countCapped = false,
-                note = "Pagination was automatically added: start=0, count=$DEFAULT_PAGE_SIZE. There may be more results."
+                note = "Pagination was automatically added: start:0, count:$DEFAULT_PAGE_SIZE. There may be more results."
             )
         }
 
         val params = parseQueryParams(query)
         val locatorValue = params.firstOrNull { it.first == "locator" }?.second ?: ""
 
-        val hasStart = params.any { it.first == "start" } ||
-            LOCATOR_START_PATTERN.containsMatchIn(locatorValue)
-        val hasCount = params.any { it.first == "count" } ||
-            LOCATOR_COUNT_PATTERN.containsMatchIn(locatorValue)
+        // Detect pagination in locator
+        val hasLocatorStart = LOCATOR_START_PATTERN.containsMatchIn(locatorValue)
+        val hasLocatorCount = LOCATOR_COUNT_PATTERN.containsMatchIn(locatorValue)
 
-        // Cap count if it exceeds MAX_PAGE_SIZE
-        val capResult = capCount(query, params, locatorValue)
+        // Detect deprecated top-level start/count
+        val rawTopStart = params.firstOrNull { it.first == "start" }
+        val rawTopCount = params.firstOrNull { it.first == "count" }
+
+        // Only migrate into locator if the locator doesn't already have them
+        val topStartToMigrate = if (!hasLocatorStart) rawTopStart else null
+        val topCountToMigrate = if (!hasLocatorCount) rawTopCount else null
+
+        // Migrate top-level start/count into locator
+        val migrated = migrateTopLevelPaging(params, locatorValue, topStartToMigrate, topCountToMigrate)
+
+        val hasStart = hasLocatorStart || rawTopStart != null
+        val hasCount = hasLocatorCount || rawTopCount != null
+
+        // Strip any remaining deprecated top-level start/count even if not migrated
+        val workingQuery = if (migrated != null) {
+            migrated.query
+        } else if (rawTopStart != null || rawTopCount != null) {
+            // Locator already has them — just strip the top-level duplicates
+            val remaining = params.filter { it.first != "start" && it.first != "count" }
+            remaining.joinToString("&") { (k, v) -> if (v.isEmpty()) k else "$k=$v" }
+        } else {
+            query
+        }
+        val workingParams = if (migrated != null) parseQueryParams(workingQuery) else params
+        val workingLocator = workingParams.firstOrNull { it.first == "locator" }?.second ?: ""
+
+        // Cap count in locator if it exceeds MAX_PAGE_SIZE
+        val capResult = capLocatorCount(workingQuery, workingLocator)
 
         if (hasStart && hasCount) {
-            return if (capResult != null) {
-                PagingResult(capResult.query, enforced = false, countCapped = true, note = capResult.note)
-            } else {
-                PagingResult(query, enforced = false, countCapped = false, note = null)
-            }
+            val notes = mutableListOf<String>()
+            if (migrated != null) notes.add(migrated.note)
+            if (capResult != null) notes.add(capResult.note)
+            val finalQuery = capResult?.query ?: workingQuery
+            return PagingResult(
+                finalQuery,
+                enforced = migrated != null,
+                countCapped = capResult != null,
+                note = notes.joinToString("\n").ifEmpty { null }
+            )
         }
 
-        val workingQuery = capResult?.query ?: query
-        val additions = mutableListOf<String>()
-        if (!hasStart) additions.add("start=0")
-        if (!hasCount) additions.add("count=$DEFAULT_PAGE_SIZE")
+        // Add missing pagination to locator
+        val queryAfterCap = capResult?.query ?: workingQuery
+        val paramsAfterCap = parseQueryParams(queryAfterCap)
+        val locatorAfterCap = paramsAfterCap.firstOrNull { it.first == "locator" }?.second ?: ""
 
-        val newQuery = workingQuery + "&" + additions.joinToString("&")
-        val addedDesc = additions.joinToString(", ")
+        val additions = mutableListOf<String>()
+        if (!hasStart) additions.add("start:0")
+        if (!hasCount) additions.add("count:$DEFAULT_PAGE_SIZE")
+        val addedDims = additions.joinToString(",")
+
+        val newQuery = if (locatorAfterCap.isNotEmpty()) {
+            // Append to existing locator
+            val newLocator = "$locatorAfterCap,$addedDims"
+            rebuildQueryWithLocator(paramsAfterCap, newLocator)
+        } else {
+            // Create new locator param
+            val otherParams = paramsAfterCap.filter { it.first != "locator" }
+            val parts = mutableListOf("locator=$addedDims")
+            otherParams.forEach { (k, v) -> parts.add(if (v.isEmpty()) k else "$k=$v") }
+            parts.joinToString("&")
+        }
 
         val notes = mutableListOf<String>()
-        notes.add("Pagination parameters were automatically added: $addedDesc. There may be more results.")
+        notes.add("Pagination parameters were automatically added: $addedDims. There may be more results.")
+        if (migrated != null) notes.add(migrated.note)
         if (capResult?.note != null) notes.add(capResult.note)
 
         return PagingResult(
@@ -222,37 +268,61 @@ class RestGetTool(
         )
     }
 
-    private fun capCount(
-        query: String,
+    /**
+     * Migrates deprecated top-level start= and count= query parameters into the locator.
+     * Returns null if no migration was needed.
+     */
+    private fun migrateTopLevelPaging(
         params: List<Pair<String, String>>,
-        locatorValue: String
-    ): CapResult? {
-        // Check top-level count
-        val topLevelCount = params.firstOrNull { it.first == "count" }
-        if (topLevelCount != null) {
-            val countVal = topLevelCount.second.toIntOrNull()
-            if (countVal != null && countVal > MAX_PAGE_SIZE) {
-                val newQuery = query.replaceFirst(
-                    "count=${topLevelCount.second}",
-                    "count=$MAX_PAGE_SIZE"
-                )
-                return CapResult(newQuery, "Count was reduced from $countVal to $MAX_PAGE_SIZE (maximum allowed).")
-            }
+        locatorValue: String,
+        topStart: Pair<String, String>?,
+        topCount: Pair<String, String>?
+    ): MigrationResult? {
+        if (topStart == null && topCount == null) return null
+
+        val dimsToAdd = mutableListOf<String>()
+        if (topStart != null) dimsToAdd.add("start:${topStart.second}")
+        if (topCount != null) dimsToAdd.add("count:${topCount.second}")
+
+        val newLocator = if (locatorValue.isNotEmpty()) {
+            "$locatorValue,${dimsToAdd.joinToString(",")}"
+        } else {
+            dimsToAdd.joinToString(",")
         }
 
-        // Check locator-embedded count
-        val locatorMatch = LOCATOR_COUNT_PATTERN.find(locatorValue)
-        if (locatorMatch != null) {
-            val countVal = locatorMatch.groupValues[1].toIntOrNull()
-            if (countVal != null && countVal > MAX_PAGE_SIZE) {
-                val oldFragment = "count:$countVal"
-                val newFragment = "count:$MAX_PAGE_SIZE"
-                val newQuery = query.replaceFirst(oldFragment, newFragment)
-                return CapResult(newQuery, "Count was reduced from $countVal to $MAX_PAGE_SIZE (maximum allowed).")
+        val remainingParams = params.filter { it.first != "start" && it.first != "count" && it.first != "locator" }
+        val parts = mutableListOf("locator=$newLocator")
+        remainingParams.forEach { (k, v) -> parts.add(if (v.isEmpty()) k else "$k=$v") }
+        val newQuery = parts.joinToString("&")
+
+        val migratedDesc = dimsToAdd.joinToString(", ")
+        return MigrationResult(newQuery, "Migrated deprecated top-level parameters into locator: $migratedDesc.")
+    }
+
+    private fun capLocatorCount(query: String, locatorValue: String): CapResult? {
+        val locatorMatch = LOCATOR_COUNT_PATTERN.find(locatorValue) ?: return null
+        val countVal = locatorMatch.groupValues[1].toIntOrNull() ?: return null
+        if (countVal <= MAX_PAGE_SIZE) return null
+
+        val oldFragment = "count:$countVal"
+        val newFragment = "count:$MAX_PAGE_SIZE"
+        val newQuery = query.replaceFirst(oldFragment, newFragment)
+        return CapResult(newQuery, "Count was reduced from $countVal to $MAX_PAGE_SIZE (maximum allowed).")
+    }
+
+    private fun rebuildQueryWithLocator(
+        params: List<Pair<String, String>>,
+        newLocator: String
+    ): String {
+        val parts = mutableListOf<String>()
+        for ((k, v) in params) {
+            if (k == "locator") {
+                parts.add("locator=$newLocator")
+            } else {
+                parts.add(if (v.isEmpty()) k else "$k=$v")
             }
         }
-
-        return null
+        return parts.joinToString("&")
     }
 
     private fun formatResponse(
@@ -321,3 +391,4 @@ class RestGetTool(
 }
 
 private data class CapResult(val query: String, val note: String)
+private data class MigrationResult(val query: String, val note: String)

@@ -28,7 +28,7 @@ This guide teaches you how to use the `teamcity_rest_get`, `teamcity_rest_post`,
 
 ## Automatic Behaviors
 
-- **Pagination enforced**: If you omit pagination, `start=0&count=10` is added. Max `count` is 100.
+- **Pagination enforced**: If you omit pagination, `start:0,count:10` is added to the locator. Max `count` is 100. Always specify `start` and `count` inside the locator — top-level query parameters are deprecated.
 - **Response format**: The tool always returns a structured JSON envelope with `meta`, `contentType`, and payload fields (`body` or `bodyText`).
 - **Response notes**: Hints about pagination, truncation, and missing fields are in `meta.notes` (array of strings).
 - **Truncation**: Very large responses are truncated. If you see a truncation warning, use narrower `fields` or smaller `count`.
@@ -41,7 +41,7 @@ This guide teaches you how to use the `teamcity_rest_get`, `teamcity_rest_post`,
 The tool output is a structured JSON envelope:
 
 ```json
-{"meta":{"url":"/app/rest/builds?start=0&count=10&fields=build(id,status)","statusCode":200,"truncated":false,"hasNextHref":true,"notes":["More results available. Use the 'nextHref' value from the response to fetch the next page."]},"contentType":"application/json","body":{"count":2,"nextHref":"/app/rest/builds?start=10&count=10","build":[{"id":123,"status":"SUCCESS"},{"id":124,"status":"FAILURE"}]}}
+{"meta":{"url":"/app/rest/builds?locator=start:0,count:10&fields=build(id,status)","statusCode":200,"truncated":false,"hasNextHref":true,"notes":["More results available. Use the 'nextHref' value from the response to fetch the next page."]},"contentType":"application/json","body":{"count":2,"nextHref":"/app/rest/builds?locator=start:10,count:10","build":[{"id":123,"status":"SUCCESS"},{"id":124,"status":"FAILURE"}]}}
 ```
 
 - Use `meta.notes` for warnings/guidance.
@@ -113,11 +113,11 @@ locator=buildType:(id:MyBuild),sinceDate:20260201T000000+0000,untilDate:20260215
 
 ## Pagination
 
-Default: 10 items from offset 0. Maximum page size: 100.
+Default: 10 items from offset 0. Maximum page size: 100. Always specify `start` and `count` inside the locator — do NOT use them as top-level query parameters (deprecated).
 
 **Strategy:**
 1. Check total: `fields=count` with your locator
-2. Fetch page: add `count:100` to your locator, or `count=100` as query param
+2. Fetch page: add `count:100` to your locator (e.g., `locator=buildType:(id:BT1),count:100`)
 3. If response contains `nextHref`, extract path and query for the next call
 
 **Parsing `nextHref`**: The value is a relative URL like `/app/rest/builds?locator=...,start:10,count:10&fields=...`. Split on `?` to get the `path` and `query` for your next tool call.

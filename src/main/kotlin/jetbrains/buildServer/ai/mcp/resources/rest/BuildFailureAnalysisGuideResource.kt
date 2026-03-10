@@ -62,8 +62,8 @@ query: locator=buildType:(id:BT_ID),failedToStart:true,defaultFilter:false,count
 
 For failed-to-start builds, check build problems — they usually explain why the build couldn't start:
 ```
-    path: /app/rest/builds/id:BUILD_ID/problemOccurrences
-query: fields=problemOccurrence(type,details,logAnchor)
+path: /app/rest/problemOccurrences
+query: locator=build:(id:BUILD_ID)&fields=problemOccurrence(type,details,logAnchor)
 ```
 
 ## Step 1c: Canceled Builds
@@ -107,8 +107,8 @@ Pattern: scan upstream builds for `status:FAILURE` and pick the one with no fail
 When a build fails because an upstream dependency failed, it gets a snapshot dependency problem. The `additionalData` field on these problems contains the **promotion ID** of the failed upstream build:
 
 ```
-path: /app/rest/builds/id:BUILD_ID/problemOccurrences
-query: fields=problemOccurrence(type,details,logAnchor,additionalData)
+path: /app/rest/problemOccurrences
+query: locator=build:(id:BUILD_ID)&fields=problemOccurrence(type,details,logAnchor,additionalData)
 ```
 
 If you see `type` containing "snapshotDependency", the `additionalData` points to the upstream build that actually failed. Investigate that build instead.
@@ -120,8 +120,8 @@ If you see `type` containing "snapshotDependency", the `additionalData` points t
 Build problems represent issues detected during the build — failed steps, exit codes, compilation errors, out-of-memory, etc.
 
 ```
-path: /app/rest/builds/id:BUILD_ID/problemOccurrences
-query: fields=problemOccurrence(id,type,identity,details,logAnchor,newFailure,additionalData)
+path: /app/rest/problemOccurrences
+query: locator=build:(id:BUILD_ID)&fields=problemOccurrence(id,type,identity,details,logAnchor,newFailure,additionalData)
 ```
 
 **Important**: `details`, `logAnchor`, `newFailure`, and `additionalData` are **not returned by default** — you must include them in `fields`.
@@ -164,8 +164,8 @@ count: 80
 Test failures are the most common build failure type. Get them with details:
 
 ```
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor,duration,muted,currentlyInvestigated)
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor,duration,muted,currentlyInvestigated)
 ```
 
 **Important**: `details`, `newFailure`, and `logAnchor` are **not returned by default** — you must include them in `fields`.
@@ -194,8 +194,8 @@ This shows surrounding build output: setup steps, other test runs, environment i
 ### Check when a test first started failing
 
 ```
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,firstFailed(id,number,buildType(id)),nextFixed(id,number))
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE&fields=testOccurrence(name,firstFailed(id,number,buildType(id)),nextFixed(id,number))
 ```
 
 - `firstFailed` — the build where this test first broke. Compare its changes to understand the root cause.
@@ -276,8 +276,8 @@ query: locator=buildType:(id:BT_ID)&fields=investigation(id,state,assignee(usern
 Also check if known failures are muted:
 
 ```
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE,currentlyMuted:true&fields=testOccurrence(name,mute(assignment(user(username)),resolution(type)))
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE,currentlyMuted:true&fields=testOccurrence(name,mute(assignment(user(username)),resolution(type)))
 ```
 
 ---

@@ -103,9 +103,13 @@ class RestGetTool(
                     |  /app/rest/projects - all projects
                     |  /app/rest/buildTypes - build configurations
                     |  /app/rest/agents - build agents
-                    |  /app/rest/changes - VCS changes
-                    |  /app/rest/builds/id:<buildId>/testOccurrences - test results in a build
-                    |  /app/rest/builds/id:<buildId>/problemOccurrences - build problems
+                    |  /app/rest/changes - VCS changes (use locator=build:(id:<buildId>) to filter by build)
+                    |  /app/rest/testOccurrences - test results (use locator=build:(id:<buildId>) to filter by build)
+                    |  /app/rest/problemOccurrences - build problems (use locator=build:(id:<buildId>) to filter by build)
+                    |
+                    |  IMPORTANT: Do NOT use sub-resource paths like /builds/id:<buildId>/testOccurrences or
+                    |  /builds/id:<buildId>/problemOccurrences for querying lists — they return ALL items ignoring
+                    |  pagination. Always use top-level endpoints with locator filters instead.
                 """.trimMargin()
                 )
             }
@@ -138,7 +142,7 @@ class RestGetTool(
                     |  fields=project(id,name,parentProjectId)
                     |  locator=project:(id:MyProject)&fields=buildType(id,name)
                     |  fields=agent(id,name,connected,authorized)
-                    |  locator=status:FAILURE&fields=testOccurrence(id,name,status,details)
+                    |  locator=build:(id:12345),status:FAILURE&fields=testOccurrence(id,name,status,details)
                     |  locator=build:(id:12345)&fields=change(id,version,username,comment)
                 """.trimMargin()
                 )

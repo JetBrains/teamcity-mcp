@@ -124,6 +124,31 @@ Default: 10 items from offset 0. Maximum page size: 100. Always specify `start` 
 
 **If a query returns 0 results unexpectedly**, the server may have stopped scanning. Try increasing `lookupLimit` (e.g., `lookupLimit:50000`).
 
+## Querying Lists of Items (Critical Pattern)
+
+**NEVER access lists as sub-resources** (e.g. `/<parent>/id:123/<items>`) — they return ALL items ignoring pagination, which can be thousands.
+
+**ALWAYS query lists via top-level endpoints** with the parent specified in the locator:
+
+| Correct endpoint | Parent filter in locator |
+|------------------|--------------------------|
+| `/testOccurrences` | `build:(id:123)` |
+| `/problemOccurrences` | `build:(id:123)` |
+| `/builds` | `buildType:(id:BT1)` or `project:(id:P1)` |
+| `/investigations` | `buildType:(id:BT1)` |
+| `/buildTypes` | `project:(id:P1)` |
+| `/agents` | `pool:(id:1)` |
+| `/vcsRootInstances` | `vcsRoot:(id:1)` |
+| `/changes` | `build:(id:123)` or `buildType:(id:BT1)` |
+
+Example — get up to 10 failed tests for a build:
+```
+path: /app/rest/testOccurrences
+query: locator=build:(id:48231),status:FAILURE,count:10&fields=testOccurrence(name,status)
+```
+
+This is the only way to get proper pagination (`start`, `count`) and server-side filtering for list resources.
+
 ## Common Task Patterns
 
 ### "Why did build 48231 fail?"
@@ -136,16 +161,16 @@ path: /app/rest/builds/id:48231
 query: fields=id,number,status,statusText
 
 # 2. Build problems — always include details and logAnchor (excluded by default)
-path: /app/rest/builds/id:48231/problemOccurrences
-query: fields=problemOccurrence(id,type,details,logAnchor)
+path: /app/rest/problemOccurrences
+query: locator=build:(id:48231)&fields=problemOccurrence(id,type,details,logAnchor)
 
 # 3. Log around the problem — start before logAnchor to see the lead-up
 tool: teamcity_build_log
 buildId: 48231, start: 310, count: 60
 
 # 4. Test failures — include details, newFailure, logAnchor (excluded by default)
-path: /app/rest/builds/id:48231/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
+path: /app/rest/testOccurrences
+query: locator=build:(id:48231),status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
 
 # 5. Log around a test — start before logAnchor for setup context
 tool: teamcity_build_log
@@ -269,12 +294,12 @@ query: fields=build(id,buildType(id,name),branchName,waitReason)
 ### Tests
 ```
 # Test failures in a build — include details and log anchor
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE&fields=testOccurrence(name,status,details,newFailure,logAnchor)
 
 # Test failures — short form (without stacktraces)
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,status,duration)
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE&fields=testOccurrence(name,status,duration)
 
 # Test history
 path: /app/rest/testOccurrences
@@ -291,8 +316,8 @@ Key `testOccurrence` fields (must be explicitly requested):
 ### Build Problems
 ```
 # Build problems with details and log anchors
-path: /app/rest/builds/id:BUILD_ID/problemOccurrences
-query: fields=problemOccurrence(id,type,details,logAnchor)
+path: /app/rest/problemOccurrences
+query: locator=build:(id:BUILD_ID)&fields=problemOccurrence(id,type,details,logAnchor)
 ```
 
 Key `problemOccurrence` fields (must be explicitly requested):
@@ -472,8 +497,8 @@ query: fields=id,number,status,state,statusText,percentageComplete
 **Step 4** — If the build fails, investigate:
 ```
 tool: teamcity_rest_get
-path: /app/rest/builds/id:BUILD_ID/testOccurrences
-query: locator=status:FAILURE&fields=testOccurrence(name,details,logAnchor)
+path: /app/rest/testOccurrences
+query: locator=build:(id:BUILD_ID),status:FAILURE&fields=testOccurrence(name,details,logAnchor)
 ```
 
 ## POST Response Format

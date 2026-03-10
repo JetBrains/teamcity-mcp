@@ -111,6 +111,39 @@ locator=buildType:(id:MyBuild),sinceDate:20260201T000000+0000
 locator=buildType:(id:MyBuild),sinceDate:20260201T000000+0000,untilDate:20260215T235959+0000
 ```
 
+### String Matching in Locators
+
+Some dimensions in the **build locator** support a condition syntax for fuzzy matching. This works on dimensions like `number` and `agentName`:
+
+```
+<dimension>:(value:<text>,matchType:<type>,ignoreCase:true)
+```
+
+Common `matchType` values:
+| matchType | Description |
+|-----------|-------------|
+| `equals` | Exact match (default) |
+| `contains` | Substring match |
+| `starts-with` | Prefix match |
+| `ends-with` | Suffix match |
+| `matches` | Regex match |
+
+**`ignoreCase`** defaults to `false`. Add `ignoreCase:true` when you need case-insensitive matching.
+
+Examples:
+```
+# Find builds by agent name containing "macos" (case-insensitive)
+/app/rest/builds locator=agentName:(value:macos,matchType:contains,ignoreCase:true),count:10
+
+# Find builds with number starting with "221"
+/app/rest/builds locator=buildType:(id:BT_ID),number:(value:221,matchType:starts-with),count:10
+
+# Find builds with number matching a regex
+/app/rest/builds locator=buildType:(id:BT_ID),number:(value:.*42.*,matchType:matches),count:10
+```
+
+**Important**: The `name` dimension on projects, build configurations, and agents does **not** support this condition syntax — it only supports exact matching. To find entities by partial name, fetch a list and filter the results, or use `${'$'}help` to check which dimensions support conditions.
+
 ## Pagination
 
 Default: 10 items from offset 0. Maximum page size: 100. Always specify `start` and `count` inside the locator — do NOT use them as top-level query parameters (deprecated).
@@ -138,7 +171,7 @@ Default: 10 items from offset 0. Maximum page size: 100. Always specify `start` 
 | `/investigations` | `buildType:(id:BT1)` |
 | `/buildTypes` | `project:(id:P1)` |
 | `/agents` | `pool:(id:1)` |
-| `/vcsRootInstances` | `vcsRoot:(id:1)` |
+| `/vcs-root-instances` | `vcsRoot:(id:1)` |
 | `/changes` | `build:(id:123)` or `buildType:(id:BT1)` |
 
 Example — get up to 10 failed tests for a build:
@@ -184,11 +217,11 @@ buildId: 48231, start: 490, count: 70
 Project and build configuration IDs are human-readable strings (e.g., `MyProject`, `MyProject_Build`), not opaque numbers. You can often guess them from names, but to search:
 
 ```
-# Find project by name
+# Find project by name (case-sensitive exact match)
 path: /app/rest/projects
 query: locator=name:Frontend&fields=project(id,name)
 
-# Find build config by name
+# Find build config by name (case-insensitive exact match)
 path: /app/rest/buildTypes
 query: locator=name:Deploy&fields=buildType(id,name,projectId)
 
@@ -196,6 +229,8 @@ query: locator=name:Deploy&fields=buildType(id,name,projectId)
 path: /app/rest/buildTypes
 query: locator=project:(id:MyProject)&fields=buildType(id,name)
 ```
+
+**Case sensitivity**: Project and agent `name` matching is **case-sensitive**. Build configuration `name` matching is **case-insensitive**.
 
 ### "What's the status of project X?"
 1. List its build configs: `path=/app/rest/projects/id:PROJECT_ID` `query=fields=id,name,buildTypes(buildType(id,name))`

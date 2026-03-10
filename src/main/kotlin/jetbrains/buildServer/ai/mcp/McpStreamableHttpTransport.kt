@@ -57,6 +57,19 @@ class McpStreamableHttpTransport(
 
     private val pendingResponses = ConcurrentHashMap<String, CompletableDeferred<JSONRPCMessage>>()
 
+    private var _suspendOnClose: (suspend () -> Unit) = {}
+
+    /**
+     * Register a suspend callback to be invoked during [close].
+     */
+    fun suspendOnClose(block: suspend () -> Unit) {
+        val old = _suspendOnClose
+        _suspendOnClose = {
+            old()
+            block()
+        }
+    }
+
     private val coroutineScope = CoroutineScope(
         executorService.asCoroutineDispatcher() + CoroutineName("transport $sessionId") + SupervisorJob()
     )
@@ -80,6 +93,11 @@ class McpStreamableHttpTransport(
             pendingResponses.clear()
 
             coroutineScope.cancel()
+            try {
+                _suspendOnClose.invoke()
+            } catch (e: Throwable) {
+                LOGGER.warn("Error invoking suspendOnClose for session $sessionId", e)
+            }
             try {
                 _onClose.invoke()
             } catch (e: Throwable) {

@@ -427,7 +427,7 @@ class McpStreamableHttpControllerTest {
 
         val status = awaitErrorStatus(result)
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
-        verify(timeout = 2_000) { sessionManager.removeSession("unknown") }
+        verify(timeout = 2_000) { sessionManager.removeSession(any<McpTransportSession>()) }
     }
 
     @Test
@@ -445,7 +445,7 @@ class McpStreamableHttpControllerTest {
 
         val status = awaitErrorStatus(result)
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
-        verify(timeout = 2_000) { sessionManager.removeSession("unknown") }
+        verify(timeout = 2_000) { sessionManager.removeSession(any<McpTransportSession>()) }
     }
 
     @Test
@@ -590,7 +590,7 @@ class McpStreamableHttpControllerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, status)
 
         // Verify cleanup was attempted — removeSession should be called for the new session
-        verify(timeout = 2_000) { sessionManager.removeSession(any()) }
+        verify(timeout = 2_000) { sessionManager.removeSession(any<McpTransportSession>()) }
     }
 
     @Test
@@ -679,7 +679,7 @@ class McpStreamableHttpControllerTest {
     // --- SessionClosed emitted on termination ---
 
     @Test
-    fun `DELETE emits SessionClosed when session is found and terminated`() {
+    fun `DELETE returns 200 and emits SessionClosed when session is found`() {
         val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
         every { transport.sessionId } returns "s1"
         every { sessionManager.removeSession("s1") } returns transport
@@ -690,6 +690,10 @@ class McpStreamableHttpControllerTest {
         while (!result.hasResult() && System.currentTimeMillis() < deadline) {
             Thread.sleep(10)
         }
+
+        @Suppress("UNCHECKED_CAST")
+        val response = result.result as? ResponseEntity<Void>
+        assertEquals(HttpStatus.OK, response?.statusCode)
 
         verify(timeout = 2_000) {
             eventBus.emit(match {
@@ -706,9 +710,9 @@ class McpStreamableHttpControllerTest {
         val transport2 = mockk<McpStreamableHttpTransport>(relaxed = true)
         every { transport1.sessionId } returns "s1"
         every { transport2.sessionId } returns "s2"
-        every { sessionManager.getAllSessionIds() } returns setOf("s1", "s2")
-        every { sessionManager.removeSession("s1") } returns transport1
-        every { sessionManager.removeSession("s2") } returns transport2
+        every { sessionManager.getAllSessions() } returns setOf(transport1, transport2)
+        every { sessionManager.removeSession(transport1) } returns true
+        every { sessionManager.removeSession(transport2) } returns true
 
         controller.destroy()
 
@@ -717,6 +721,90 @@ class McpStreamableHttpControllerTest {
                 it is McpEvent.SessionClosed &&
                     it.reason == "controller destroy" &&
                     (it.sessionId == "s1" || it.sessionId == "s2")
+            })
+        }
+    }
+
+    // --- Session replacement ---
+
+    @Test
+    fun `createSession closes old session when registerSession returns replaced session`() {
+        every { sessionManager.getSession("recovered") } returns null
+        mockServerConfigurator()
+
+        val oldTransport = mockk<McpTransportSession>(relaxed = true) {
+            every { sessionId } returns "recovered"
+        }
+        every { sessionManager.registerSession(any()) } returns oldTransport
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = "recovered",
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"""
+        )
+
+        // Wait for async flow
+        val deadline = System.currentTimeMillis() + 2_000
+        while (!result.hasResult() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
+
+        // Old session must be closed
+        coVerify(timeout = 2_000) { oldTransport.close() }
+
+        // SessionClosed emitted for the replaced session
+        verify(timeout = 2_000) {
+            eventBus.emit(match {
+                it is McpEvent.SessionClosed &&
+                    it.sessionId == "recovered" &&
+                    it.reason == "replaced by new session"
+            })
+        }
+    }
+
+    // --- createSession error does not emit SessionClosed ---
+
+    @Test
+    fun `createSession error does not emit SessionClosed when SessionStarted was not emitted`() {
+        every { serverConfigurator.configureServer() } throws RuntimeException("config failed")
+
+        val result = post(
+            protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
+            sessionId = null,
+            accept = "application/json, text/event-stream",
+            contentType = "application/json",
+            body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}"""
+        )
+
+        awaitErrorStatus(result)
+
+        verify(exactly = 0) {
+            eventBus.emit(match { it is McpEvent.SessionStarted })
+        }
+        verify(exactly = 0) {
+            eventBus.emit(match { it is McpEvent.SessionClosed })
+        }
+    }
+
+    // --- destroy when session already removed by callback ---
+
+    @Test
+    fun `destroy still closes transport and emits SessionClosed when removeSession returns false`() {
+        val transport = mockk<McpStreamableHttpTransport>(relaxed = true)
+        every { transport.sessionId } returns "s1"
+        every { sessionManager.getAllSessions() } returns setOf(transport)
+        every { sessionManager.removeSession(transport) } returns false
+
+        controller.destroy()
+
+        coVerify { transport.close() }
+        verify {
+            eventBus.emit(match {
+                it is McpEvent.SessionClosed &&
+                    it.sessionId == "s1" &&
+                    it.reason == "controller destroy"
             })
         }
     }

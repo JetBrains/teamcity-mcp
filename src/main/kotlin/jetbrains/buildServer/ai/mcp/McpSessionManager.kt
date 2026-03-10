@@ -44,19 +44,29 @@ class McpSessionManager {
 
     /**
      * Register a new transport session.
-     * If a session with the same ID already exists and is still open, it will be closed.
+     * Returns the old session if one existed for the same ID, so the caller can close it safely.
      */
-    suspend fun registerSession(session: McpTransportSession) {
+    fun registerSession(session: McpTransportSession): McpTransportSession? {
         val oldSession = sessions.put(session.sessionId, session)
-        if (oldSession != null && oldSession.isOpen()) {
-            LOGGER.warn("Replacing open session ${session.sessionId}; closing old session to prevent resource leak")
-            try {
-                oldSession.close()
-            } catch (e: Throwable) {
-                LOGGER.warn("Error closing old session ${session.sessionId}", e)
-            }
+        if (oldSession != null) {
+            LOGGER.warn("Replacing session ${session.sessionId}, caller must close the old session to prevent resource leak")
         }
         LOGGER.info("Registered session: ${session.sessionId}")
+        return oldSession
+    }
+
+    /**
+     * Removes a session only if the value in the map is the expected instance.
+     */
+    fun removeSession(session: McpTransportSession): Boolean {
+        val sessionId = session.sessionId
+        return sessions.remove(sessionId, session).also { removed ->
+            if (removed) {
+                LOGGER.info("Removed session: $sessionId: identity match")
+            } else {
+                LOGGER.info("Session $sessionId not removed: identity mismatch or already gone")
+            }
+        }
     }
 
     fun getSession(sessionId: String): McpTransportSession? {
@@ -71,6 +81,10 @@ class McpSessionManager {
 
     fun getAllSessionIds(): Set<String> {
         return sessions.keys.toSet()
+    }
+
+    fun getAllSessions(): Set<McpTransportSession> {
+        return sessions.values.toSet()
     }
 
     fun getSessionCount(): Int {

@@ -32,17 +32,18 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `registerSession adds session to manager`() = runBlocking {
+    fun `registerSession adds session to manager`() {
         val session = createMockSession("session-1")
 
-        sessionManager.registerSession(session)
+        val old = sessionManager.registerSession(session)
 
+        assertNull(old)
         assertEquals(1, sessionManager.getSessionCount())
         assertNotNull(sessionManager.getSession("session-1"))
     }
 
     @Test
-    fun `getSession returns correct session by ID`() = runBlocking {
+    fun `getSession returns correct session by ID`() {
         val session1 = createMockSession("session-1")
         val session2 = createMockSession("session-2")
 
@@ -61,7 +62,7 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `removeSession removes and returns session`() = runBlocking {
+    fun `removeSession removes and returns session`() {
         val session = createMockSession("session-1")
         sessionManager.registerSession(session)
 
@@ -79,7 +80,7 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `getAllSessionIds returns all session IDs`() = runBlocking {
+    fun `getAllSessionIds returns all session IDs`() {
         val session1 = createMockSession("session-1")
         val session2 = createMockSession("session-2")
         val session3 = createMockSession("session-3")
@@ -96,7 +97,7 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `getSessionCount returns correct count`() = runBlocking {
+    fun `getSessionCount returns correct count`() {
         assertEquals(0, sessionManager.getSessionCount())
 
         sessionManager.registerSession(createMockSession("session-1"))
@@ -150,7 +151,7 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `cleanupClosedSessions removes only closed sessions`() = runBlocking {
+    fun `cleanupClosedSessions removes only closed sessions`() {
         val openSession1 = createMockSession("open-1", isOpen = true)
         val openSession2 = createMockSession("open-2", isOpen = true)
         val closedSession1 = createMockSession("closed-1", isOpen = false)
@@ -172,7 +173,7 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `cleanupClosedSessions returns zero when all sessions are open`() = runBlocking {
+    fun `cleanupClosedSessions returns zero when all sessions are open`() {
         sessionManager.registerSession(createMockSession("session-1", isOpen = true))
         sessionManager.registerSession(createMockSession("session-2", isOpen = true))
 
@@ -183,14 +184,12 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `concurrent registration of sessions is thread-safe`() = runBlocking {
+    fun `concurrent registration of sessions is thread-safe`() {
         val threads = (1..10).map { threadNum ->
             Thread {
-                runBlocking {
-                    repeat(10) { iteration ->
-                        val sessionId = "session-$threadNum-$iteration"
-                        sessionManager.registerSession(createMockSession(sessionId))
-                    }
+                repeat(10) { iteration ->
+                    val sessionId = "session-$threadNum-$iteration"
+                    sessionManager.registerSession(createMockSession(sessionId))
                 }
             }
         }
@@ -202,29 +201,29 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `multiple registrations with same session ID replaces previous session`() = runBlocking {
+    fun `multiple registrations with same session ID replaces previous session`() {
         val session1 = createMockSession("same-id")
         val session2 = createMockSession("same-id")
 
         sessionManager.registerSession(session1)
-        sessionManager.registerSession(session2)
+        val old = sessionManager.registerSession(session2)
 
+        assertEquals(session1, old)
         assertEquals(1, sessionManager.getSessionCount())
-        val retrieved = sessionManager.getSession("same-id")
-        assertEquals(session2, retrieved)
+        assertEquals(session2, sessionManager.getSession("same-id"))
     }
 
     @Test
-    fun `registerSession closes old session when replacing with same ID`() = runBlocking {
+    fun `registerSession returns old session without closing it`() {
         val oldSession = createMockSession("same-id", isOpen = true)
         val newSession = createMockSession("same-id", isOpen = true)
 
         sessionManager.registerSession(oldSession)
-        sessionManager.registerSession(newSession)
+        val returned = sessionManager.registerSession(newSession)
 
-        // CRITICAL: Old session MUST be closed to prevent resource leak
-        // Without this, old transport keeps connections, threads, and emitters alive
-        coVerify { oldSession.close() }
+        // Old session is returned but NOT closed — caller is responsible
+        assertEquals(oldSession, returned)
+        coVerify(exactly = 0) { oldSession.close() }
 
         // New session should be registered
         assertEquals(1, sessionManager.getSessionCount())
@@ -232,17 +231,46 @@ class McpSessionManagerTest {
     }
 
     @Test
-    fun `registerSession does not close old session if already closed`() = runBlocking {
-        val oldSession = createMockSession("same-id", isOpen = false)
-        val newSession = createMockSession("same-id", isOpen = true)
+    fun `getAllSessions returns all session objects`() {
+        val session1 = createMockSession("session-1")
+        val session2 = createMockSession("session-2")
+
+        sessionManager.registerSession(session1)
+        sessionManager.registerSession(session2)
+
+        val sessions = sessionManager.getAllSessions()
+        assertEquals(2, sessions.size)
+        assertTrue(sessions.contains(session1))
+        assertTrue(sessions.contains(session2))
+    }
+
+    @Test
+    fun `removeSession with identity match removes only if same instance`() {
+        val session1 = createMockSession("same-id")
+        val session2 = createMockSession("same-id")
+
+        sessionManager.registerSession(session1)
+
+        // Should NOT remove: wrong instance
+        assertFalse(sessionManager.removeSession(session2))
+        assertEquals(1, sessionManager.getSessionCount())
+
+        // Should remove: correct instance
+        assertTrue(sessionManager.removeSession(session1))
+        assertEquals(0, sessionManager.getSessionCount())
+    }
+
+    @Test
+    fun `removeSession with identity match returns false for replaced session`() {
+        val oldSession = createMockSession("same-id")
+        val newSession = createMockSession("same-id")
 
         sessionManager.registerSession(oldSession)
         sessionManager.registerSession(newSession)
 
-        // Old session already closed, should not call close() again
-        coVerify(exactly = 0) { oldSession.close() }
-
-        assertEquals(1, sessionManager.getSessionCount())
+        // Old session's callback trying to remove — should fail (new session is in the map)
+        assertFalse(sessionManager.removeSession(oldSession))
+        // New session still there
         assertEquals(newSession, sessionManager.getSession("same-id"))
     }
 }

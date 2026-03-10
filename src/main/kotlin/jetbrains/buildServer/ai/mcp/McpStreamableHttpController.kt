@@ -1,17 +1,12 @@
 package jetbrains.buildServer.ai.mcp
 
 import com.intellij.openapi.diagnostic.Logger
-import io.modelcontextprotocol.kotlin.sdk.types.RequestId
 import jetbrains.buildServer.ai.mcp.events.McpEvent
 import jetbrains.buildServer.ai.mcp.events.McpEventBus
 import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.util.NamedDaemonThreadFactory
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.SerializationException
 import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.core.context.SecurityContextHolder
@@ -109,46 +104,37 @@ class McpStreamableHttpController(
             )
         }
 
-        val messageJson = try {
-            Json.parseToJsonElement(body).jsonObject
-        } catch (e: Throwable) {
-            LOGGER.warn("Failed to parse JSON-RPC message for sessionId: $sessionId", e)
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid JSON-RPC message", e)
-        }
+        val request = McpRequest.parse(body)
 
-        val isInitialize = isInitializeRequest(messageJson)
-
-        if (isInitialize) {
-            val clientInfo = extractClientInfo(messageJson)
-            LOGGER.info("Initialize request received: protocolVersion=$protocolVersion, clientInfo=$clientInfo")
-            eventBus.emit(McpEvent.InitializeRequested(protocolVersion, clientInfo))
+        if (request.isInitialize) {
+            LOGGER.info("Initialize request received: protocolVersion=$protocolVersion, clientInfo=${request.clientInfo}")
+            eventBus.emit(McpEvent.InitializeRequested(protocolVersion, request.clientInfo))
         }
 
         validateProtocolVersion(protocolVersion)
         validateAcceptHeader(accept)
 
-        if (isInitialize && sessionId != null) {
+        if (request.isInitialize && sessionId != null) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Initialize request must not include $SESSION_ID_HEADER header"
             )
         }
 
-        if (!isInitialize && sessionId == null) {
+        if (!request.isInitialize && sessionId == null) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "$SESSION_ID_HEADER header required for non-initialize requests"
             )
         }
 
-        return if (isInitialize && sessionId == null) {
-            handleInitializePost(body, messageJson, servletRequest)
+        return if (request.isInitialize && sessionId == null) {
+            handleInitializePost(request, servletRequest)
         } else if (sessionId != null) {
-            val isRequest = isRequest(messageJson)
-            if (isRequest) {
-                handleRequestPost(sessionId, body, messageJson, servletRequest)
+            if (request.isRequest) {
+                handleRequestPost(sessionId, request, servletRequest)
             } else {
-                handleNotificationPost(sessionId, body, messageJson, servletRequest)
+                handleNotificationPost(sessionId, request, servletRequest)
             }
         } else {
             throw ResponseStatusException(
@@ -210,27 +196,24 @@ class McpStreamableHttpController(
      */
     @OptIn(ExperimentalUuidApi::class)
     private fun handleInitializePost(
-        body: String,
-        messageJson: JsonObject,
+        request: McpRequest,
         servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
-        val requestId = extractRequestId(messageJson)
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing or invalid 'id' in initialize request")
-        val clientInfo = extractClientInfo(messageJson)
+        val requestId = request.requireRequestId("initialize request")
 
         return launchDeferred(
             coroutineName = "POST init",
-            logContext = "POST initialize requestId=${requestId.displayValue()}",
+            logContext = "POST initialize requestId=${request.requestIdDisplay()}",
             authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val newSessionId = Uuid.random().toString()
-            LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: $clientInfo)")
+            LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: ${request.clientInfo})")
 
-            val transport = createSession(newSessionId, clientInfo)
+            val transport = createSession(newSessionId, request.clientInfo)
             try {
                 val responseDeferred = transport.captureResponse(requestId)
 
-                transport.handlePostMessage(body)
+                transport.handlePostMessage(request.body)
 
                 val response = responseDeferred.await()
                 val responseJson = McpJson.encodeToString(response)
@@ -245,7 +228,7 @@ class McpStreamableHttpController(
                 val reason = if (e is CancellationException) "Initialize request cancelled" else "Initialize request failed"
                 transport.cancelResponse(requestId, reason)
                 withContext(NonCancellable) {
-                    terminateSession(newSessionId, reason)
+                    terminateSession(transport, reason)
                 }
                 throw e
             }
@@ -258,25 +241,21 @@ class McpStreamableHttpController(
      */
     private fun handleRequestPost(
         sessionId: String,
-        body: String,
-        messageJson: JsonObject,
+        request: McpRequest,
         servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
-        val requestId = extractRequestId(messageJson) ?: throw ResponseStatusException(
-            HttpStatus.BAD_REQUEST,
-            "Missing or invalid 'id' in request"
-        )
+        val requestId = request.requireRequestId()
 
         return launchDeferred(
-            coroutineName = "POST request $sessionId/${requestId.displayValue()}",
-            logContext = "POST request sessionId=$sessionId requestId=${requestId.displayValue()}",
+            coroutineName = "POST request $sessionId/${request.requestIdDisplay()}",
+            logContext = "POST request sessionId=$sessionId requestId=${request.requestIdDisplay()}",
             authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
-            val session = getOrCreateSession(sessionId, extractClientInfo(messageJson))
+            val session = getOrCreateSession(sessionId, request.clientInfo)
             val responseDeferred = session.captureResponse(requestId)
             try {
-                session.handlePostMessage(body)
-                eventBus.emit(McpEvent.MessageReceived(sessionId, extractMethod(messageJson)))
+                session.handlePostMessage(request.body)
+                eventBus.emit(McpEvent.MessageReceived(sessionId, request.method))
 
                 val response = responseDeferred.await()
                 val responseJson = McpJson.encodeToString(response)
@@ -298,8 +277,7 @@ class McpStreamableHttpController(
      */
     private fun handleNotificationPost(
         sessionId: String,
-        body: String,
-        messageJson: JsonObject,
+        request: McpRequest,
         servletRequest: HttpServletRequest
     ): DeferredResult<ResponseEntity<String>> {
         return launchDeferred(
@@ -307,9 +285,9 @@ class McpStreamableHttpController(
             logContext = "POST notification sessionId=$sessionId",
             authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
-            val session = getOrCreateSession(sessionId, extractClientInfo(messageJson))
-            session.handlePostMessage(body)
-            eventBus.emit(McpEvent.MessageReceived(sessionId, extractMethod(messageJson)))
+            val session = getOrCreateSession(sessionId, request.clientInfo)
+            session.handlePostMessage(request.body)
+            eventBus.emit(McpEvent.MessageReceived(sessionId, request.method))
             result.setResult(ResponseEntity.accepted().build())
         }
     }
@@ -429,51 +407,6 @@ class McpStreamableHttpController(
         }
     }
 
-    private fun isInitializeRequest(messageJson: JsonObject): Boolean {
-        val hasId = messageJson.containsKey("id")
-        val hasMethod = messageJson.containsKey("method")
-        val method = try {
-            messageJson["method"]?.jsonPrimitive?.content
-        } catch (_: Throwable) {
-            null
-        }
-        return hasId && hasMethod && method == "initialize"
-    }
-
-    private fun isRequest(messageJson: JsonObject): Boolean {
-        val hasId = messageJson.containsKey("id")
-        val hasMethod = messageJson.containsKey("method")
-        return hasId && hasMethod
-    }
-
-    private fun extractMethod(messageJson: JsonObject): String? = try {
-        messageJson["method"]?.jsonPrimitive?.content
-    } catch (_: Throwable) {
-        null
-    }
-
-    private fun extractClientInfo(messageJson: JsonObject): String? = try {
-        messageJson["params"]?.jsonObject?.get("clientInfo")?.toString()
-    } catch (_: Exception) {
-        null
-    }
-
-    private fun RequestId.displayValue(): String = when (this) {
-        is RequestId.StringId -> value
-        is RequestId.NumberId -> value.toString()
-    }
-
-    private fun extractRequestId(messageJson: JsonObject): RequestId? {
-        val idElement = messageJson["id"] ?: return null
-        if (idElement !is kotlinx.serialization.json.JsonPrimitive) return null
-        return if (idElement.isString) {
-            RequestId(idElement.content)
-        } else {
-            val longVal = idElement.content.toLongOrNull() ?: return null
-            RequestId(longVal)
-        }
-    }
-
     /**
      * Get an existing session or create a new one if not found locally.
      * Supports multinode scenarios where session can be initialized on another node.
@@ -506,31 +439,36 @@ class McpStreamableHttpController(
             clientIdleTimeoutMs = getClientIdleTimeoutMs()
         )
         try {
-            serverConfigurator.configureServer().let { server ->
-                server.onClose {
-                    LOGGER.info("Server connection closed for session: $sessionId")
-                    terminateSessionAsync(sessionId, "server closed")
+            val server = serverConfigurator.configureServer()
+            transport.suspendOnClose {
+                try {
+                    server.close()
+                } catch (e: Throwable) {
+                    LOGGER.warn("Failed to close server for sessionId: $sessionId", e)
                 }
-                server.createSession(transport)
-                LOGGER.debug("Server connected to transport for session: $sessionId")
             }
+            server.createSession(transport)
+            LOGGER.debug("Server connected to transport for session: $sessionId")
 
             transport.initSessionTimeoutWatchdog(getWatchdogPeriodSec().seconds) { reason ->
-                terminateSessionAsync(sessionId, reason)
+                if (sessionManager.removeSession(transport)) {
+                    closeSessionAsync(transport, reason)
+                }
             }
 
-            sessionManager.registerSession(transport)
+            val oldSession = sessionManager.registerSession(transport)
+            if (oldSession != null) {
+                closeSessionAsync(oldSession, "replaced by new session")
+            }
             eventBus.emit(McpEvent.SessionStarted(sessionId, clientInfo))
 
             return transport
         } catch (e: Throwable) {
             withContext(NonCancellable) {
-                sessionManager.removeSession(sessionId)
+                sessionManager.removeSession(transport)
                 closeTransportSafely(
                     transport,
-                    timeoutMs = getCloseTimeoutMs(),
-                    sessionId = sessionId,
-                    reason = "session creation failed"
+                    "session creation failed"
                 )
             }
             throw e
@@ -541,60 +479,42 @@ class McpStreamableHttpController(
         return e is SerializationException || e is IllegalArgumentException
     }
 
-    private fun terminateSessionAsync(sessionId: String, reason: String) {
-        launch(CoroutineName("terminate-session $sessionId")) {
-            try {
-                when (terminateSession(sessionId, reason)) {
-                    SessionTerminationResult.CLOSED -> {
-                        LOGGER.info("Session terminated: $sessionId, reason: $reason")
-                    }
-                    SessionTerminationResult.CLOSE_TIMED_OUT -> {
-                        LOGGER.warn("Session termination timed out for sessionId: $sessionId, reason: $reason. Session was removed.")
-                    }
-                    SessionTerminationResult.CLOSE_FAILED -> {
-                        LOGGER.warn("Session termination failed for sessionId: $sessionId, reason: $reason. Session was removed.")
-                    }
-                    SessionTerminationResult.NOT_FOUND -> {
-                        LOGGER.debug("Session already removed for session: $sessionId, reason: $reason")
-                    }
-                }
-            } catch (_: CancellationException) {
-                LOGGER.debug("Transport removal cancelled for sessionId: $sessionId, attempting force-terminate")
-                withContext(NonCancellable) {
-                    terminateSession(sessionId, "$reason (remove cancelled)")
-                }
-            } catch (e: Throwable) {
-                LOGGER.warn("Error removing transport for sessionId: $sessionId, attempting force-terminate", e)
-                withContext(NonCancellable) {
-                    terminateSession(sessionId, "$reason (remove error)")
-                }
-            }
+    private fun closeSessionAsync(transport: McpTransportSession, reason: String) {
+        launch(CoroutineName("close-session ${transport.sessionId}")) {
+            closeTransportSafely(
+                transport,
+                reason
+            )
+            eventBus.emit(McpEvent.SessionClosed(transport.sessionId, reason))
         }
     }
 
     private suspend fun terminateSession(sessionId: String, reason: String): SessionTerminationResult {
-        val transport = sessionManager.removeSession(sessionId)
-            ?: return SessionTerminationResult.NOT_FOUND
+        val transport = sessionManager.removeSession(sessionId) ?: return SessionTerminationResult.NOT_FOUND
+        val closeResult = closeTransportSafely(transport, reason)
+        eventBus.emit(McpEvent.SessionClosed(sessionId, reason))
+        return closeResult
+    }
 
-        val closeResult = closeTransportSafely(
-            transport,
-            timeoutMs = getCloseTimeoutMs(),
-            sessionId = sessionId,
-            reason = reason
-        )
+    private suspend fun terminateSession(transport: McpTransportSession, reason: String): SessionTerminationResult {
+        val sessionId = transport.sessionId
 
+        if (!sessionManager.removeSession(transport)) {
+            LOGGER.warn("Session $sessionId not found, transport will be attempted to close anyway")
+        }
+
+        val closeResult = closeTransportSafely(transport, reason)
         eventBus.emit(McpEvent.SessionClosed(sessionId, reason))
         return closeResult
     }
 
     private suspend fun closeTransportSafely(
         transport: McpTransportSession,
-        timeoutMs: Long,
-        sessionId: String,
         reason: String
     ): SessionTerminationResult = withContext(NonCancellable) {
+        val sessionId = transport.sessionId
         try {
-            withTimeout(timeoutMs) {
+            withTimeout(getCloseTimeoutMs()) {
                 transport.close()
             }
             SessionTerminationResult.CLOSED
@@ -608,17 +528,15 @@ class McpStreamableHttpController(
     }
 
     override fun destroy() {
-        job.cancel()
-
         runBlocking {
             withTimeoutOrNull(getDestroyTimeoutMs()) {
-                val sessionIds = sessionManager.getAllSessionIds().toList()
-                for (sessionId in sessionIds) {
-                    terminateSession(sessionId, "controller destroy")
+                for (session in sessionManager.getAllSessions()) {
+                    terminateSession(session, "controller destroy")
                 }
             } ?: LOGGER.warn("Session cleanup timed out during destroy")
         }
 
+        job.cancel()
         coroutineExecutor.shutdown()
         try {
             if (!coroutineExecutor.awaitTermination(getDestroyTimeoutMs(), TimeUnit.MILLISECONDS)) {

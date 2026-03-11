@@ -8,7 +8,6 @@ import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.util.NamedDaemonThreadFactory
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerializationException
-import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.http.HttpStatus
@@ -148,7 +147,6 @@ class McpStreamableHttpController(
         coroutineName: String,
         logContext: String,
         authorizationHeader: String?,
-        capturedSecurityContext: SecurityContext = SecurityContextHolder.getContext(),
         block: suspend (DeferredResult<ResponseEntity<T>>) -> Unit
     ): DeferredResult<ResponseEntity<T>> {
         val result = DeferredResult<ResponseEntity<T>>(getRequestTimeoutMs())
@@ -164,7 +162,7 @@ class McpStreamableHttpController(
             try {
                 toolExecutionContext.withOperationContext(
                     authorizationHeader = authorizationHeader,
-                    capturedSecurityContext = capturedSecurityContext
+                    capturedSecurityContext = SecurityContextHolder.getContext()
                 ) {
                     block(result)
                 }

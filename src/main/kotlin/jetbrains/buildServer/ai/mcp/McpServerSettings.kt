@@ -23,8 +23,8 @@ class SettingsService {
     fun isMcpServerEnabled() = TeamCityProperties.getBooleanOrTrue(MCP_FEATURE_TOGGLE)
 
     /**
-     * Returns the set of enabled tool names, or `null` if all tools are enabled,
-     * empty string - no tools enabled
+     * Returns the set of enabled tool names.
+     * Empty property: no tools enabled.
      */
     fun getEnabledToolNames(): Set<String> {
         val raw = TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED)
@@ -35,7 +35,7 @@ class SettingsService {
 
     /**
      * Returns the set of enabled resource settings names.
-     * Empty string: no resources enabled.
+     * Empty property: no resources enabled.
      */
     fun getEnabledResourceNames(): Set<String> {
         val raw = TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED)

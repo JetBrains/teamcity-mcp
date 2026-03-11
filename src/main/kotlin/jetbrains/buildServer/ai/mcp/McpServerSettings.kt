@@ -3,7 +3,6 @@ package jetbrains.buildServer.ai.mcp
 import jetbrains.buildServer.ai.mcp.resources.rest.BuildFailureAnalysisGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
 
-import jetbrains.buildServer.ai.mcp.tools.FeedbackTool
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
@@ -29,7 +28,7 @@ class SettingsService {
      */
     fun getEnabledToolNames(): Set<String> {
         val raw = TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED)
-            ?: return setOf(FeedbackTool.NAME, RestGetTool.NAME, RestPostTool.NAME, BuildLogTool.NAME)
+            ?: return setOf(RestGetTool.NAME, RestPostTool.NAME, BuildLogTool.NAME)
         if (raw.isBlank()) return emptySet()
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }

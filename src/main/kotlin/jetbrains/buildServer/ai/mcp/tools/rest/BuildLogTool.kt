@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
+import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.serverSide.BuildsManager
 import jetbrains.buildServer.serverSide.buildLog.BuildLogReaderEx
 import jetbrains.buildServer.serverSide.buildLog.LogMessage
@@ -14,7 +15,8 @@ import org.springframework.stereotype.Component
 
 @Component
 class BuildLogTool(
-    @Autowired(required = false) private val buildsManager: BuildsManager? = null
+    @Autowired(required = false) private val buildsManager: BuildsManager? = null,
+    private val maxScanLimitOverride: Int? = null
 ) : McpTool {
 
     companion object {
@@ -23,7 +25,9 @@ class BuildLogTool(
         internal const val NAME = "teamcity_build_log"
         internal const val DEFAULT_COUNT = 100
         internal const val MAX_COUNT = 300
-        internal const val MAX_SCAN = 10_000
+        internal const val MAX_SCAN = 50_000
+        internal const val MAX_SCAN_PROPERTY = "teamcity.ai.mcp.buildLog.filtering.maxMessagesToScan"
+        internal const val MAX_RESPONSE_SIZE = 300_000  // ~300 KB max response to protect LLM context
 
         internal fun statusPrefix(priority: Int): String? = when (priority) {
             4 -> "[ERROR] "
@@ -41,6 +45,13 @@ class BuildLogTool(
             "warnings" -> 2  // WARNING (2), FAILURE (3), ERROR (4)
             else -> null      // no client-side filtering
         }
+
+        private fun stringParam(arguments: JsonObject?, key: String): String? = try {
+            arguments?.get(key)?.jsonPrimitive?.content
+        } catch (_: Exception) {
+            null
+        }
+
     }
 
     override val name = NAME
@@ -48,7 +59,8 @@ class BuildLogTool(
     override val description = """
         |View build log messages with filtering and pagination.
         |
-        |Returns build log as plain text, one message per line.
+        |Returns build log as plain text in original log message order.
+        |Individual log messages may span multiple lines.
         |Lines with warnings/errors are prefixed: [WARNING], [FAILURE], [ERROR].
         |Normal messages have no prefix.
         |
@@ -90,7 +102,7 @@ class BuildLogTool(
     )
 
     override suspend fun execute(arguments: JsonObject?): McpToolResult {
-        val buildIdStr = arguments?.get("buildId")?.jsonPrimitive?.content?.trim()
+        val buildIdStr = stringParam(arguments, "buildId")?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: return McpToolResult.error("'buildId' parameter is required")
 
@@ -100,11 +112,11 @@ class BuildLogTool(
         val manager = buildsManager
             ?: return McpToolResult.error("Build log service is not available")
 
-        val filter = arguments["filter"]?.jsonPrimitive?.content?.trim()
+        val filter = stringParam(arguments, "filter")?.trim()
             ?.takeIf { it.isNotBlank() }
-        val start = arguments["start"]?.jsonPrimitive?.content?.trim()
+        val start = stringParam(arguments, "start")?.trim()
             ?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        val requestedCount = arguments["count"]?.jsonPrimitive?.content?.trim()
+        val requestedCount = stringParam(arguments, "count")?.trim()
             ?.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_COUNT
         val count = requestedCount.coerceAtMost(MAX_COUNT)
 
@@ -142,7 +154,10 @@ class BuildLogTool(
         var lastScannedIndex = -1
         var scanned = 0
         var hasMore = false
-        val maxScan = if (statusThreshold != null) MAX_SCAN else Int.MAX_VALUE
+        var totalSize = 0
+        var sizeLimitReached = false
+        var nextPageStartOverride: Int? = null
+        val maxScan = if (statusThreshold != null) (maxScanLimitOverride ?: getBuildLogMaxScan()) else Int.MAX_VALUE
 
         while (rawIterator.hasNext()) {
             if (lines.size >= count) {
@@ -164,7 +179,18 @@ class BuildLogTool(
             if (statusThreshold != null && statusPriority < statusThreshold) continue
 
             val prefix = statusPrefix(statusPriority) ?: ""
-            lines.add("$prefix${msg.text}")
+            val line = "$prefix${msg.text}"
+
+            // Check size limit (always allow at least one message)
+            if (lines.isNotEmpty() && totalSize + line.length > MAX_RESPONSE_SIZE) {
+                nextPageStartOverride = msg.index  // re-fetch this message on next page
+                hasMore = true
+                sizeLimitReached = true
+                break
+            }
+
+            lines.add(line)
+            totalSize += line.length
         }
 
         val lastMessageIncluded = !hasMore
@@ -173,8 +199,12 @@ class BuildLogTool(
             val statusLabel = if (statusThreshold >= 3) "FAILURE/ERROR" else "WARNING/FAILURE/ERROR"
             notes.add("Status filter applied: showing $statusLabel messages ($scanned scanned, ${lines.size} matched).")
             if (scanned >= maxScan && lines.size < count) {
-                notes.add("Scan limit reached ($MAX_SCAN messages). Use a higher 'start' to continue.")
+                notes.add("Scan limit reached ($maxScan messages). Use a higher 'start' to continue.")
             }
+        }
+
+        if (sizeLimitReached) {
+            notes.add("Response truncated: data size limit reached. Use next page start to continue.")
         }
 
         if (!lastMessageIncluded) {
@@ -182,7 +212,8 @@ class BuildLogTool(
         }
 
         // Build output: single header line + notes + log lines
-        val tail = if (lastMessageIncluded) "end of log" else "next page start: ${lastScannedIndex + 1}"
+        val nextPageStart = nextPageStartOverride ?: (lastScannedIndex + 1)
+        val tail = if (lastMessageIncluded) "end of log" else "next page start: $nextPageStart"
         val sb = StringBuilder()
         sb.appendLine("--- Build log: ${lines.size} messages, $tail ---")
         for (note in notes) {
@@ -196,3 +227,6 @@ class BuildLogTool(
         return McpToolResult.success(sb.toString())
     }
 }
+
+private fun getBuildLogMaxScan(): Int =
+    TeamCityProperties.getInteger(BuildLogTool.MAX_SCAN_PROPERTY, BuildLogTool.MAX_SCAN).coerceAtLeast(1)

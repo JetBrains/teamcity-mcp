@@ -1,6 +1,7 @@
 package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
 import io.mockk.mockk
+import jetbrains.buildServer.users.SUser
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -25,7 +26,7 @@ class McpToolExecutionContextTest {
         }
 
         executionContext.withOperationContext(
-            authorizationHeader = null,
+            user = null,
             capturedSecurityContext = captured
         ) {
             assertSame(captured, SecurityContextHolder.getContext())
@@ -36,19 +37,18 @@ class McpToolExecutionContextTest {
     }
 
     @Test
-    fun `withOperationContext binds authorization header`() = runBlocking {
+    fun `withOperationContext binds user`() = runBlocking {
         val executionContext = McpToolExecutionContext()
+        val user = mockk<SUser>(relaxed = true)
 
-        executionContext.withOperationContext(
-            authorizationHeader = "Bearer test-token"
-        ) {
-            assertEquals("Bearer test-token", executionContext.currentAuthorizationHeader())
+        executionContext.withOperationContext(user = user) {
+            assertEquals(user, executionContext.currentUser())
         }
     }
 
     @Test
-    fun `current authorization header is null outside operation context`() = runBlocking {
+    fun `current user is null outside operation context`() = runBlocking {
         val executionContext = McpToolExecutionContext()
-        assertNull(executionContext.currentAuthorizationHeader())
+        assertNull(executionContext.currentUser())
     }
 }

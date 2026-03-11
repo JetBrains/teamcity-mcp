@@ -2,54 +2,90 @@ package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import jetbrains.buildServer.ServerUrlProvider
-import jetbrains.buildServer.util.HTTPRequestBuilder
+import jetbrains.buildServer.controllers.BaseController
+import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
+import jetbrains.buildServer.controllers.fakes.FakeHttpServletRequest
+import jetbrains.buildServer.controllers.fakes.FakeHttpServletResponse
+import jetbrains.buildServer.serverSide.SecurityContextEx
+import jetbrains.buildServer.users.SUser
+import jetbrains.spring.web.UrlMapping
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class RestApiClientImplTest {
 
-    private val requestHandler = mockk<HTTPRequestBuilder.RequestHandler>()
-    private val serverUrlProvider = mockk<ServerUrlProvider>().also {
-        every { it.rootUrl } returns "http://localhost:8111"
+    private val fakeHttpRequestsFactory = mockk<FakeHttpRequestsFactory>()
+    private val urlMapping = mockk<UrlMapping>()
+    private val securityContext = mockk<SecurityContextEx>().also { ctx ->
+        every { ctx.runAs<Any>(any(), any()) } answers {
+            @Suppress("UNCHECKED_CAST")
+            val action = invocation.args[1] as SecurityContextEx.RunAsActionWithResult<Any>
+            action.run()
+        }
+    }
+    private val executionContext = McpToolExecutionContext()
+    private val user = mockk<SUser>(relaxed = true)
+
+    private val client = RestApiClientImpl(
+        executionContext, fakeHttpRequestsFactory, urlMapping, securityContext
+    )
+
+    private fun setupController(block: (FakeHttpServletResponse) -> Unit): FakeHttpServletRequest {
+        val fakeRequest = FakeHttpServletRequest()
+        every { fakeHttpRequestsFactory.get(any(), any()) } returns fakeRequest
+
+        val controller = mockk<BaseController>()
+        every { urlMapping.handlerMap } returns mapOf("/app/rest/**" to controller)
+        every { controller.handleRequestInternal(any(), any()) } answers {
+            block(secondArg())
+            null
+        }
+
+        return fakeRequest
     }
 
     @Test
     fun `get returns response body and status code`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 200
-        every { httpResponse.bodyAsString } returns """{"ok":true}"""
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
-
-        val context = McpToolExecutionContext()
+        setupController { response ->
+            response.status = 200
+            response.writer.write("""{"ok":true}""")
+        }
 
         val result = runBlocking {
-            context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "fields=count")
+            executionContext.withOperationContext(user = user) {
+                client.get("/app/rest/server", "fields=count")
             }
         }
 
         assertEquals(200, result.statusCode)
         assertEquals("""{"ok":true}""", result.body)
-        verify { httpResponse.close() }
+    }
+
+    @Test
+    fun `get creates request with GET method`() {
+        val fakeRequest = setupController { it.status = 200 }
+
+        runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.get("/app/rest/server", "")
+            }
+        }
+
+        assertEquals("GET", fakeRequest.method)
     }
 
     @Test
     fun `get captures non-200 status codes`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 404
-        every { httpResponse.bodyAsString } returns "Not Found"
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
-
-        val context = McpToolExecutionContext()
+        setupController { response ->
+            response.status = 404
+            response.writer.write("Not Found")
+        }
 
         val result = runBlocking {
-            context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/missing", "")
+            executionContext.withOperationContext(user = user) {
+                client.get("/app/rest/missing", "")
             }
         }
 
@@ -58,62 +94,42 @@ class RestApiClientImplTest {
     }
 
     @Test
-    fun `get closes response even on read failure`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 200
-        every { httpResponse.bodyAsString } throws RuntimeException("read error")
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
-
-        val context = McpToolExecutionContext()
-
-        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException::class.java) {
-            runBlocking {
-                context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                    RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "")
-                }
-            }
+    fun `get returns 401 when no user in context`() {
+        val result = runBlocking {
+            client.get("/app/rest/server", "")
         }
 
-        verify { httpResponse.close() }
+        assertEquals(401, result.statusCode)
     }
 
     @Test
-    fun `post returns response body and status code`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 200
-        every { httpResponse.bodyAsString } returns """{"id":123}"""
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
-
-        val context = McpToolExecutionContext()
+    fun `post dispatches to controller and returns response`() {
+        val fakeRequest = setupController { response ->
+            response.status = 200
+            response.writer.write("""{"id":123}""")
+        }
 
         val result = runBlocking {
-            context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                RestApiClientImpl(context, requestHandler, serverUrlProvider)
-                    .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            executionContext.withOperationContext(user = user) {
+                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
             }
         }
 
         assertEquals(200, result.statusCode)
         assertEquals("""{"id":123}""", result.body)
-        verify { httpResponse.close() }
+        assertEquals("POST", fakeRequest.method)
     }
 
     @Test
     fun `post captures non-200 status codes`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 403
-        every { httpResponse.bodyAsString } returns "Forbidden"
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
-
-        val context = McpToolExecutionContext()
+        setupController { response ->
+            response.status = 403
+            response.writer.write("Forbidden")
+        }
 
         val result = runBlocking {
-            context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                RestApiClientImpl(context, requestHandler, serverUrlProvider)
-                    .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            executionContext.withOperationContext(user = user) {
+                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
             }
         }
 
@@ -122,43 +138,55 @@ class RestApiClientImplTest {
     }
 
     @Test
-    fun `post closes response even on read failure`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 200
-        every { httpResponse.bodyAsString } throws RuntimeException("read error")
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+    fun `post sets internal request attributes correctly`() {
+        val fakeRequest = setupController { it.status = 200 }
 
-        val context = McpToolExecutionContext()
-
-        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException::class.java) {
-            runBlocking {
-                context.withOperationContext(authorizationHeader = "Bearer test-token") {
-                    RestApiClientImpl(context, requestHandler, serverUrlProvider)
-                        .post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
-                }
+        runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.post("/app/rest/buildQueue", "", "{}")
             }
         }
 
-        verify { httpResponse.close() }
+        assertEquals("POST", fakeRequest.method)
+        assertTrue(fakeRequest.getAttribute("INTERNAL_REQUEST") != null)
+        assertEquals("application/json", fakeRequest.getHeader("content-type"))
+        assertEquals("application/json", fakeRequest.getHeader("accept"))
     }
 
     @Test
-    fun `get works without authorization header`() {
-        val httpResponse = mockk<HTTPRequestBuilder.Response>()
-        every { httpResponse.statusCode } returns 200
-        every { httpResponse.bodyAsString } returns """{"ok":true}"""
-        every { httpResponse.close() } returns Unit
-        every { requestHandler.doSyncRequest(any()) } returns httpResponse
+    fun `get sets internal request attributes correctly`() {
+        val fakeRequest = setupController { it.status = 200 }
 
-        val context = McpToolExecutionContext()
-
-        val result = runBlocking {
-            context.withOperationContext(authorizationHeader = null) {
-                RestApiClientImpl(context, requestHandler, serverUrlProvider).get("/app/rest/server", "")
+        runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.get("/app/rest/server", "")
             }
         }
 
-        assertEquals(200, result.statusCode)
+        assertEquals("GET", fakeRequest.method)
+        assertTrue(fakeRequest.getAttribute("INTERNAL_REQUEST") != null)
+        assertEquals("application/json", fakeRequest.getHeader("accept"))
+    }
+
+    @Test
+    fun `post returns 401 when no user in context`() {
+        val result = runBlocking {
+            client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+        }
+
+        assertEquals(401, result.statusCode)
+    }
+
+    @Test
+    fun `returns 503 when controller not found`() {
+        every { urlMapping.handlerMap } returns emptyMap()
+
+        val result = runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+            }
+        }
+
+        assertEquals(503, result.statusCode)
     }
 }

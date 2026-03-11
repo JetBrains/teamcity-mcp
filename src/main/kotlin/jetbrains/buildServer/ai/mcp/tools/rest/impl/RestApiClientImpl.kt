@@ -1,32 +1,42 @@
 package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
-import jetbrains.buildServer.ServerUrlProvider
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiClient
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse
 import jetbrains.buildServer.ai.mcp.tools.rest.RestToolUtils
-import jetbrains.buildServer.serverSide.IOGuard
-import jetbrains.buildServer.util.FuncThrow
-import jetbrains.buildServer.util.HTTPRequestBuilder
+import jetbrains.buildServer.controllers.BaseController
+import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
+import jetbrains.buildServer.controllers.fakes.FakeHttpServletResponse
+import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.util.http.HttpMethod
+import jetbrains.buildServer.web.util.SessionUser
+import jetbrains.spring.web.UrlMapping
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Component
+import java.io.ByteArrayInputStream
 
 /**
- * REST API client that makes real HTTP requests to the local TeamCity server.
+ * REST API client that dispatches requests internally via the REST controller
  */
 @Component
 class RestApiClientImpl(
     private val executionContext: McpToolExecutionContext,
-    private val requestHandler: HTTPRequestBuilder.RequestHandler,
-    private val serverUrlProvider: ServerUrlProvider
+    private val fakeHttpRequestsFactory: FakeHttpRequestsFactory,
+    private val urlMapping: UrlMapping,
+    private val securityContext: SecurityContextEx
 ) : RestApiClient {
 
-    override suspend fun get(path: String, query: String): RestApiResponse =
-        executeRequest(HttpMethod.GET, path, query)
+    override suspend fun get(path: String, query: String): RestApiResponse {
+        return withContext(Dispatchers.IO) {
+            executeRequest( HttpMethod.GET, path, query)
+        }
+    }
 
-    override suspend fun post(path: String, query: String, body: String): RestApiResponse =
-        executeRequest(HttpMethod.POST, path, query, body)
+    override suspend fun post(path: String, query: String, body: String): RestApiResponse {
+        return withContext(Dispatchers.IO) {
+            executeRequest(HttpMethod.POST, path, query, body)
+        }
+    }
 
     private suspend fun executeRequest(
         method: HttpMethod,
@@ -34,39 +44,46 @@ class RestApiClientImpl(
         query: String,
         body: String? = null
     ): RestApiResponse {
-        val authHeader = executionContext.currentAuthorizationHeader()
+        val user = executionContext.currentUser() ?: return RestApiResponse(
+            body = "No authenticated user in context",
+            statusCode = 401
+        )
 
-        val baseUrl = serverUrlProvider.rootUrl.trimEnd('/')
-        val sanitizedQuery = RestToolUtils.sanitizeQuery(query)
-        val url = if (sanitizedQuery.isBlank()) "$baseUrl$path" else "$baseUrl$path?$sanitizedQuery"
-
-        val builder = HTTPRequestBuilder.request(url)
-            .withMethod(method)
-            .withHeader("Accept", "application/json, text/plain")
-            .withUserAgent("mcp-rest-client")
-            .allowNonSecureConnection(true)
-
-        if (body != null) {
-            builder.withPostStringEntity(body, "application/json", Charsets.UTF_8)
-        }
-
-        authHeader?.let {
-            builder.withHeader("Authorization", it)
-        }
-
-        val response = withContext(Dispatchers.IO) {
-            IOGuard.allowNetworkCall(FuncThrow {
-                requestHandler.doSyncRequest(builder.build())
-            })
-        }
+        val controller = urlMapping.handlerMap["/app/rest/**"] as? BaseController ?: return RestApiResponse(
+            body = "REST API controller not available", statusCode = 503
+        )
 
         return try {
-            RestApiResponse(
-                body = response.bodyAsString ?: "",
-                statusCode = response.statusCode
-            )
-        } finally {
-            response.close()
+            securityContext.runAs(user, SecurityContextEx.RunAsActionWithResult {
+                val request = fakeHttpRequestsFactory.get(path, RestToolUtils.sanitizeQuery(query))
+                request.setMethod(method.name)
+                request.setHeader("Accept", "application/json")
+                request.setAttribute("INTERNAL_REQUEST", true)
+                SessionUser.setUser(request, user)
+
+                if (body != null) {
+                    request.setInputStream(ByteArrayInputStream(body.toByteArray(Charsets.UTF_8)))
+                    request.setHeader("Content-Type", "application/json")
+                }
+
+                val response = FakeHttpServletResponse()
+                try {
+                    controller.handleRequestInternal(request, response)
+                } catch (e: Exception) {
+                    return@RunAsActionWithResult RestApiResponse(
+                        body = e.message ?: "Internal error",
+                        statusCode = 400
+                    )
+                }
+
+                val statusCode = if (response.status == 0) 200 else response.status
+                RestApiResponse(
+                    body = response.returnedContent ?: "",
+                    statusCode = statusCode
+                )
+            })
+        } catch (e: Throwable) {
+            RestApiResponse(body = e.message ?: "Internal error", statusCode = 500)
         }
     }
 }

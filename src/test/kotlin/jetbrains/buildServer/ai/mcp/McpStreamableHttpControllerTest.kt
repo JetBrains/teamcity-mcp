@@ -4,6 +4,8 @@ import io.mockk.*
 import jetbrains.buildServer.ai.mcp.events.McpEvent
 import jetbrains.buildServer.ai.mcp.events.McpEventBus
 import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
+import jetbrains.buildServer.serverSide.SecurityContextEx
+import jetbrains.buildServer.serverSide.auth.AuthorityHolder
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.serialization.SerializationException
 import org.junit.jupiter.api.AfterEach
@@ -26,6 +28,7 @@ class McpStreamableHttpControllerTest {
     private lateinit var serverConfigurator: McpServerConfigurator
     private lateinit var eventBus: McpEventBus
     private lateinit var toolExecutionContext: McpToolExecutionContext
+    private lateinit var securityContext: SecurityContextEx
     private lateinit var controller: McpStreamableHttpController
 
     @BeforeEach
@@ -35,6 +38,11 @@ class McpStreamableHttpControllerTest {
         serverConfigurator = mockk()
         eventBus = mockk(relaxed = true)
         toolExecutionContext = McpToolExecutionContext()
+        securityContext = mockk(relaxed = true)
+
+        val authorityHolder = mockk<AuthorityHolder>(relaxed = true)
+        every { authorityHolder.associatedUser } returns null
+        every { securityContext.authorityHolder } returns authorityHolder
 
         every { settingsService.isMcpServerEnabled() } returns true
 
@@ -43,7 +51,8 @@ class McpStreamableHttpControllerTest {
             sessionManager = sessionManager,
             serverConfigurator = serverConfigurator,
             eventBus = eventBus,
-            toolExecutionContext = toolExecutionContext
+            toolExecutionContext = toolExecutionContext,
+            securityContext = securityContext
         )
     }
 

@@ -1,5 +1,6 @@
 package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
+import jetbrains.buildServer.users.SUser
 import kotlinx.coroutines.ThreadContextElement
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
@@ -13,26 +14,26 @@ import kotlin.coroutines.CoroutineContext
 class McpToolExecutionContext {
 
     suspend fun <T> withOperationContext(
-        authorizationHeader: String?,
+        user: SUser?,
         capturedSecurityContext: SecurityContext = SecurityContextHolder.getContext(),
         block: suspend () -> T
     ): T {
         return withContext(
-            SecurityContextElement(capturedSecurityContext) + AuthorizationHeaderElement(authorizationHeader)
+            SecurityContextElement(capturedSecurityContext) + UserElement(user)
         ) {
             block()
         }
     }
 
-    suspend fun currentAuthorizationHeader(): String? {
-        return currentCoroutineContext()[AuthorizationHeaderElement]?.header
+    suspend fun currentUser(): SUser? {
+        return currentCoroutineContext()[UserElement]?.user
     }
 }
 
-private class AuthorizationHeaderElement(
-    val header: String?
+private class UserElement(
+    val user: SUser?
 ) : AbstractCoroutineContextElement(Key) {
-    companion object Key : CoroutineContext.Key<AuthorizationHeaderElement>
+    companion object Key : CoroutineContext.Key<UserElement>
 }
 
 

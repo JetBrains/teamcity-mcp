@@ -4,7 +4,9 @@ import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.events.McpEvent
 import jetbrains.buildServer.ai.mcp.events.McpEventBus
 import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
+import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.serverSide.TeamCityProperties
+import jetbrains.buildServer.users.SUser
 import jetbrains.buildServer.util.NamedDaemonThreadFactory
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerializationException
@@ -54,7 +56,8 @@ class McpStreamableHttpController(
     private val sessionManager: McpSessionManager,
     private val serverConfigurator: McpServerConfigurator,
     private val eventBus: McpEventBus,
-    private val toolExecutionContext: McpToolExecutionContext
+    private val toolExecutionContext: McpToolExecutionContext,
+    private val securityContext: SecurityContextEx
 ) : DisposableBean, CoroutineScope {
 
     companion object {
@@ -146,7 +149,6 @@ class McpStreamableHttpController(
     private fun <T> launchDeferred(
         coroutineName: String,
         logContext: String,
-        authorizationHeader: String?,
         block: suspend (DeferredResult<ResponseEntity<T>>) -> Unit
     ): DeferredResult<ResponseEntity<T>> {
         val result = DeferredResult<ResponseEntity<T>>(getRequestTimeoutMs())
@@ -158,11 +160,14 @@ class McpStreamableHttpController(
             )
             job.get()?.cancel(CancellationException("$logContext: timed out"))
         }
+        // should be captured outside the coroutine!
+        val capturedUser = securityContext.authorityHolder.associatedUser as? SUser
+        val capturedSecurityContext = SecurityContextHolder.getContext()
         job.set(launch(CoroutineName(coroutineName)) {
             try {
                 toolExecutionContext.withOperationContext(
-                    authorizationHeader = authorizationHeader,
-                    capturedSecurityContext = SecurityContextHolder.getContext()
+                    user = capturedUser,
+                    capturedSecurityContext = capturedSecurityContext
                 ) {
                     block(result)
                 }
@@ -202,7 +207,6 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "POST init",
             logContext = "POST initialize requestId=${request.requestIdDisplay()}",
-            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val newSessionId = Uuid.random().toString()
             LOGGER.info("Initializing new MCP session: $newSessionId (clientInfo: ${request.clientInfo})")
@@ -247,7 +251,6 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "POST request $sessionId/${request.requestIdDisplay()}",
             logContext = "POST request sessionId=$sessionId requestId=${request.requestIdDisplay()}",
-            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val session = getOrCreateSession(sessionId, request.clientInfo)
             val responseDeferred = session.captureResponse(requestId)
@@ -281,7 +284,6 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "POST notif $sessionId",
             logContext = "POST notification sessionId=$sessionId",
-            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             val session = getOrCreateSession(sessionId, request.clientInfo)
             session.handlePostMessage(request.body)
@@ -335,7 +337,6 @@ class McpStreamableHttpController(
         return launchDeferred(
             coroutineName = "DELETE $sessionId",
             logContext = "DELETE sessionId=$sessionId",
-            authorizationHeader = servletRequest.getHeader("Authorization")
         ) { result ->
             try {
                 when (terminateSession(sessionId, "client request")) {

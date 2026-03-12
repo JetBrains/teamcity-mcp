@@ -6,7 +6,6 @@ import jetbrains.buildServer.ai.mcp.tools.rest.RestToolUtils
 import jetbrains.buildServer.controllers.BaseController
 import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletResponse
-import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.util.http.HttpMethod
 import jetbrains.buildServer.web.util.SessionUser
 import jetbrains.spring.web.UrlMapping
@@ -22,8 +21,7 @@ import java.io.ByteArrayInputStream
 class RestApiClientImpl(
     private val executionContext: McpToolExecutionContext,
     private val fakeHttpRequestsFactory: FakeHttpRequestsFactory,
-    private val urlMapping: UrlMapping,
-    private val securityContext: SecurityContextEx
+    private val urlMapping: UrlMapping
 ) : RestApiClient {
 
     override suspend fun get(path: String, query: String): RestApiResponse {
@@ -54,34 +52,32 @@ class RestApiClientImpl(
         )
 
         return try {
-            securityContext.runAs(user, SecurityContextEx.RunAsActionWithResult {
-                val request = fakeHttpRequestsFactory.get(path, RestToolUtils.sanitizeQuery(query))
-                request.setMethod(method.name)
-                request.setHeader("Accept", "application/json")
-                request.setAttribute("INTERNAL_REQUEST", true)
-                SessionUser.setUser(request, user)
+            val request = fakeHttpRequestsFactory.get(path, RestToolUtils.sanitizeQuery(query))
+            request.setMethod(method.name)
+            request.setHeader("Accept", "application/json")
+            request.setAttribute("INTERNAL_REQUEST", true)
+            SessionUser.setUser(request, user)
 
-                if (body != null) {
-                    request.setInputStream(ByteArrayInputStream(body.toByteArray(Charsets.UTF_8)))
-                    request.setHeader("Content-Type", "application/json")
-                }
+            if (body != null) {
+                request.setInputStream(ByteArrayInputStream(body.toByteArray(Charsets.UTF_8)))
+                request.setHeader("Content-Type", "application/json")
+            }
 
-                val response = FakeHttpServletResponse()
-                try {
-                    controller.handleRequestInternal(request, response)
-                } catch (e: Exception) {
-                    return@RunAsActionWithResult RestApiResponse(
-                        body = e.message ?: "Internal error",
-                        statusCode = 400
-                    )
-                }
-
-                val statusCode = if (response.status == 0) 200 else response.status
-                RestApiResponse(
-                    body = response.returnedContent ?: "",
-                    statusCode = statusCode
+            val response = FakeHttpServletResponse()
+            try {
+                controller.handleRequestInternal(request, response)
+            } catch (e: Exception) {
+                return RestApiResponse(
+                    body = e.message ?: "Internal error",
+                    statusCode = 400
                 )
-            })
+            }
+
+            val statusCode = if (response.status == 0) 200 else response.status
+            RestApiResponse(
+                body = response.returnedContent ?: "",
+                statusCode = statusCode
+            )
         } catch (e: Throwable) {
             RestApiResponse(body = e.message ?: "Internal error", statusCode = 500)
         }

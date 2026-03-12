@@ -6,30 +6,25 @@ import jetbrains.buildServer.controllers.BaseController
 import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletRequest
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletResponse
-import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.users.SUser
 import jetbrains.spring.web.UrlMapping
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.springframework.security.core.Authentication
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.core.context.SecurityContextHolder
 
 class RestApiClientImplTest {
 
     private val fakeHttpRequestsFactory = mockk<FakeHttpRequestsFactory>()
     private val urlMapping = mockk<UrlMapping>()
-    private val securityContext = mockk<SecurityContextEx>().also { ctx ->
-        every { ctx.runAs<Any>(any(), any()) } answers {
-            @Suppress("UNCHECKED_CAST")
-            val action = invocation.args[1] as SecurityContextEx.RunAsActionWithResult<Any>
-            action.run()
-        }
-    }
     private val executionContext = McpToolExecutionContext()
     private val user = mockk<SUser>(relaxed = true)
 
     private val client = RestApiClientImpl(
-        executionContext, fakeHttpRequestsFactory, urlMapping, securityContext
+        executionContext, fakeHttpRequestsFactory, urlMapping
     )
 
     private fun setupController(block: (FakeHttpServletResponse) -> Unit): FakeHttpServletRequest {
@@ -151,6 +146,24 @@ class RestApiClientImplTest {
         assertTrue(fakeRequest.getAttribute("INTERNAL_REQUEST") != null)
         assertEquals("application/json", fakeRequest.getHeader("content-type"))
         assertEquals("application/json", fakeRequest.getHeader("accept"))
+    }
+
+    @Test
+    fun `controller sees propagated security context`() {
+        val authentication = mockk<Authentication>(relaxed = true)
+        val securityContext = mockk<SecurityContext>()
+        every { securityContext.authentication } returns authentication
+
+        setupController { response ->
+            assertEquals(authentication, SecurityContextHolder.getContext().authentication)
+            response.status = 200
+        }
+
+        runBlocking {
+            executionContext.withOperationContext(user = user, capturedSecurityContext = securityContext) {
+                client.get("/app/rest/server", "")
+            }
+        }
     }
 
     @Test

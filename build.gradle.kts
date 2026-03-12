@@ -100,7 +100,7 @@ val integrationTest by tasks.registering(Test::class) {
         showStandardStreams = true
     }
 
-    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN").forEach { key ->
+    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN", "TC_SERVER_RESTRICTED_TOKEN").forEach { key ->
         anyParam(key)?.let { systemProperty(key, it) }
     }
 }

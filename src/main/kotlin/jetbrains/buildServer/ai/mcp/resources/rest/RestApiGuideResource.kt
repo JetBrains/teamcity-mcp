@@ -186,7 +186,7 @@ This is the only way to get proper pagination (`start`, `count`) and server-side
 
 ### "Why did build 48231 fail?"
 
-Quick overview → problems → tests → log. For a comprehensive methodology (build chains, failed-to-start, root cause analysis), see the **Build Failure Analysis Guide**.
+Quick overview → problems → tests → log. For a comprehensive methodology (build chains, failed-to-start builds, cancellation, retries, root cause analysis), see the **Build Failure Analysis Guide**.
 
 ```
 # 1. Build overview — statusText often tells you what failed

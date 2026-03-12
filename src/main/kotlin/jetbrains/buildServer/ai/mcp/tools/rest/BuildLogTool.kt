@@ -15,8 +15,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class BuildLogTool(
-    @Autowired(required = false) private val buildsManager: BuildsManager? = null,
-    private val maxScanLimitOverride: Int? = null
+    @Autowired(required = false) private val buildsManager: BuildsManager? = null
 ) : McpTool {
 
     companion object {
@@ -157,7 +156,7 @@ class BuildLogTool(
         var totalSize = 0
         var sizeLimitReached = false
         var nextPageStartOverride: Int? = null
-        val maxScan = if (statusThreshold != null) (maxScanLimitOverride ?: getBuildLogMaxScan()) else Int.MAX_VALUE
+        val maxScan = if (statusThreshold == null) Int.MAX_VALUE else getBuildLogMaxScan()
 
         while (rawIterator.hasNext()) {
             if (lines.size >= count) {

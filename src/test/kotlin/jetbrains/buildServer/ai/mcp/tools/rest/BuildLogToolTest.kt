@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test
 
 class BuildLogToolTest {
 
-    private fun tool(buildsManager: BuildsManager? = null, maxScanLimitOverride: Int? = null) =
-        BuildLogTool(buildsManager, maxScanLimitOverride)
+    private fun tool(buildsManager: BuildsManager? = null) =
+        BuildLogTool(buildsManager)
 
     /** Creates a mocked LogMessage. */
     private fun logMsg(
@@ -535,35 +535,40 @@ class BuildLogToolTest {
         @Test
         fun `scan limit prevents unbounded iteration with filter`() = runBlocking {
             val testScanLimit = 50
-            var lastReturnedIndex = -1
-            val reusableMessage = mockk<LogMessage> {
-                every { index } answers { lastReturnedIndex }
-                every { text } answers { "msg $lastReturnedIndex" }
-                every { status } returns Status.NORMAL
-            }
-            val buildLog = mockk<BuildLogReaderEx>(moreInterfaces = arrayOf(BuildLog::class)) {
-                every { createIterator(any(), eq(LogView.LINEAR)) } answers {
-                    var current = firstArg<Int>()
-                    mockk<LogMessageIterator> {
-                        every { hasNext() } answers { current < testScanLimit + 100 }
-                        every { next() } answers {
-                            lastReturnedIndex = current++
-                            reusableMessage
+            System.setProperty(BuildLogTool.MAX_SCAN_PROPERTY, testScanLimit.toString())
+            try {
+                var lastReturnedIndex = -1
+                val reusableMessage = mockk<LogMessage> {
+                    every { index } answers { lastReturnedIndex }
+                    every { text } answers { "msg $lastReturnedIndex" }
+                    every { status } returns Status.NORMAL
+                }
+                val buildLog = mockk<BuildLogReaderEx>(moreInterfaces = arrayOf(BuildLog::class)) {
+                    every { createIterator(any(), eq(LogView.LINEAR)) } answers {
+                        var current = firstArg<Int>()
+                        mockk<LogMessageIterator> {
+                            every { hasNext() } answers { current < testScanLimit + 100 }
+                            every { next() } answers {
+                                lastReturnedIndex = current++
+                                reusableMessage
+                            }
                         }
                     }
                 }
+                val build = mockk<SBuild> {
+                    every { getBuildLog() } returns buildLog as BuildLog
+                }
+                val manager = mockk<BuildsManager> {
+                    every { findBuildInstanceById(any()) } returns build
+                }
+                val result = tool(manager)
+                    .execute(args(buildId = "123", filter = "errors", count = "10"))
+                assertEquals(0, logLines(result.text).size)
+                assertTrue(result.text.contains("Scan limit"))
+                assertTrue(result.text.contains(testScanLimit.toString()))
+            } finally {
+                System.clearProperty(BuildLogTool.MAX_SCAN_PROPERTY)
             }
-            val build = mockk<SBuild> {
-                every { getBuildLog() } returns buildLog as BuildLog
-            }
-            val manager = mockk<BuildsManager> {
-                every { findBuildInstanceById(any()) } returns build
-            }
-            val result = tool(manager, maxScanLimitOverride = testScanLimit)
-                .execute(args(buildId = "123", filter = "errors", count = "10"))
-            assertEquals(0, logLines(result.text).size)
-            assertTrue(result.text.contains("Scan limit"))
-            assertTrue(result.text.contains(testScanLimit.toString()))
         }
     }
 

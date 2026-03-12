@@ -67,6 +67,9 @@ class RestGetTool(
     override val description = """
         |Perform a GET request to the TeamCity REST API to retrieve server data.
         |
+        |IMPORTANT: Before your first REST API call, read the resource "teamcity://guides/rest-api" for comprehensive guidance on endpoints, locators, field selection, and pagination.
+        |For investigating build failures, also read "teamcity://guides/build-failure-analysis" for a step-by-step methodology.
+        |
         |For JSON endpoints, always use 'fields' to select only the data you need - this is critical for keeping responses manageable.
         |Some endpoints return plain text (e.g. /builds/aggregated/.../status), where 'fields' is not applicable.
         |Always paginate with 'start' and 'count' inside the locator (max $MAX_PAGE_SIZE). Do NOT use start/count as top-level query parameters — they are deprecated.

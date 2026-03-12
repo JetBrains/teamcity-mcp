@@ -40,6 +40,8 @@ class RestPostTool(
     override val description = """
         |Perform a POST request to the TeamCity REST API.
         |
+        |IMPORTANT: Before your first use, read the resource "teamcity://guides/rest-api" (Part 2) for guidance on triggering builds, request body format, and monitoring workflows.
+        |
         |Currently limited to allowed endpoints (default: $BUILD_QUEUE_PATH).
         |All requests are enforced as personal builds — the tool automatically sets "personal": true in the request body.
         |

@@ -19,6 +19,37 @@ import org.junit.jupiter.api.TestInstance
 class PermissionRestrictedTokenTest : McpIntegrationTestBase() {
 
     @Test
+    fun `teamcity rest get with unrestricted token sees all fixture entities`() {
+        mcpClient().withSession {
+            val projectsResult = callTool("teamcity_rest_get", mapOf(
+                "path" to "/app/rest/projects",
+                "query" to "locator=parentProject:(id:_Root),count:100&fields=project(id,name)"
+            ))
+            assertFalse(projectsResult.isError, "projects query should succeed: ${projectsResult.content}")
+
+            val projectIds = extractBody(projectsResult)["project"]
+                ?.jsonArray
+                ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.content }
+                ?: emptyList()
+
+            assertTrue(VISIBLE_PROJECT_ID in projectIds, "Visible project must be returned, got $projectIds")
+            assertTrue(HIDDEN_PROJECT_ID in projectIds, "Hidden project must be returned, got $projectIds")
+
+            val buildTypesResult = callTool("teamcity_rest_get", mapOf(
+                "path" to "/app/rest/buildTypes",
+                "query" to "locator=count:100&fields=buildType(id,name,projectId)"
+            ))
+            assertFalse(buildTypesResult.isError, "buildTypes query should succeed: ${buildTypesResult.content}")
+
+            val buildTypes = extractBody(buildTypesResult)["buildType"]?.jsonArray ?: JsonArray(emptyList())
+            val buildTypeIds = buildTypes.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.content }
+
+            assertTrue(VISIBLE_BUILD_TYPE_ID in buildTypeIds, "Visible build type must be returned, got $buildTypeIds")
+            assertTrue(HIDDEN_BUILD_TYPE_ID in buildTypeIds, "Hidden build type must be returned, got $buildTypeIds")
+        }
+    }
+
+    @Test
     fun `teamcity rest get respects permission restricted token`() {
         restrictedClient().withSession {
             val projectsResult = callTool("teamcity_rest_get", mapOf(

@@ -161,7 +161,7 @@ class McpStreamableHttpController(
             job.get()?.cancel(CancellationException("$logContext: timed out"))
         }
         // should be captured outside the coroutine!
-        val capturedUser = securityContext.authorityHolder.associatedUser as? SUser
+        val capturedUser = securityContext.authorityHolder as? SUser
         val capturedSecurityContext = SecurityContextHolder.getContext()
         job.set(launch(CoroutineName(coroutineName)) {
             try {

@@ -38,11 +38,12 @@ Start by understanding what kind of failure you're dealing with.
 
 ```
 path: /app/rest/builds/id:BUILD_ID
-query: fields=id,number,status,statusText,state,failedToStart,composite,canceled,personal,buildType(id,name),agent(name),triggered(type,user(username)),startDate,finishOnAgentDate
+query: fields=id,number,status,statusText,state,branchName,failedToStart,composite,canceled,personal,buildType(id,name),agent(name),triggered(type,user(username)),startDate,finishOnAgentDate
 ```
 
 Key fields to examine:
 - **`statusText`** — human-readable summary like "Tests failed: 3 (2 new), exit code 1 (Step: Compile)". This often tells you exactly what failed.
+- **`branchName`** — which branch this build ran on. Important for context — note it for later steps.
 - **`failedToStart`** — if `true`, the build never ran (see Step 1b below).
 - **`composite`** — if `true`, this build aggregates results from dependency builds (see Step 2).
 - **`canceled`** — if `true`, someone or something canceled the build.
@@ -241,14 +242,23 @@ See the **REST API Guide**, Part 3 for `teamcity_build_log` tool parameters, res
 
 Compare changes in the failing build with the last successful build.
 
+**Branch awareness**: By default, build queries only return builds from the default branch. If the failing build ran on a non-default branch, querying for the last successful build without a branch filter will return a default-branch build — which is the wrong comparison baseline.
+
+- If you know the branch (from Step 1's `branchName`), use `branch:<name>` to find the last success on that same branch.
+- If you don't know the branch or want a broader search, use `branch:default:any`.
+
 ```
 # Changes in the failing build — look at files, authors, commit messages
 path: /app/rest/changes
 query: locator=build:(id:BUILD_ID)&fields=change(id,version,username,comment,date,files(file(file,changeType)))
 
-# Last successful build — to compare against
+# Last successful build on the SAME branch — best comparison baseline
 path: /app/rest/builds
-query: locator=buildType:(id:BT_ID),status:SUCCESS,defaultFilter:true,count:1&fields=build(id,number,finishOnAgentDate)
+query: locator=buildType:(id:BT_ID),status:SUCCESS,branch:<BRANCH_NAME>,defaultFilter:true,count:1&fields=build(id,number,branchName,finishOnAgentDate)
+
+# Or across all branches if branch is unknown
+path: /app/rest/builds
+query: locator=buildType:(id:BT_ID),status:SUCCESS,branch:default:any,defaultFilter:true,count:1&fields=build(id,number,branchName,finishOnAgentDate)
 
 # All changes since last success — these are the suspects
 path: /app/rest/changes
@@ -331,7 +341,7 @@ After applying a fix, trigger a personal build to verify. See the **REST API Gui
 
 ## Scenario F: "Build was fine yesterday, broken today"
 
-1. Get last successful build for the configuration
+1. Get last successful build for the configuration — **use `branch:<name>` matching the failing build's branch** so you compare within the same branch. Without a branch filter, you'll only see default-branch builds.
 2. Get all changes between last success and current failure
 3. Correlate changed files with the failure area
 4. Check if an infrastructure/agent change happened (compare `agent(name)`)
@@ -340,6 +350,7 @@ After applying a fix, trigger a personal build to verify. See the **REST API Gui
 
 # Tips
 
+- **Branch matters**: Build queries default to the default branch only. Always note `branchName` from Step 1 and use `branch:<name>` in subsequent queries (e.g., finding last success) to stay on the same branch. Use `branch:default:any` when you need to search across all branches. See Step 6 for details.
 - **Always request `details`, `logAnchor`, and `newFailure` explicitly** — they're excluded from default fields.
 - **Use `defaultFilter:false`** when you need to see failed-to-start, canceled, or personal builds.
 - **Start with `filter=errors`** when reading logs — expand to warnings and full log only if needed.

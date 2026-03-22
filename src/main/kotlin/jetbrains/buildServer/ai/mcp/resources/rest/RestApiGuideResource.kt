@@ -92,12 +92,22 @@ locator=affectedProject:(id:MyProject)
 | `state` | `finished`, `running`, `queued`, `any` | Build state |
 | `project` | `(id:PROJ_ID)` | Direct parent project |
 | `affectedProject` | `(id:PROJ_ID)` | Project including all subprojects |
-| `branch` | `default:any` or `name:main` | Branch filter. Use `default:any` for all branches |
+| `branch` | `default:any` or `name:main` | Branch filter — see **Branch Filtering** below |
 | `defaultFilter` | `true`/`false` | Exclude personal/canceled builds (default: true) |
 | `tag` | tag name | Filter by tag |
 | `agent` | `(name:AgentName)` | Agent that ran the build |
 | `sinceDate` | `yyyyMMddTHHmmss+0000` | Builds after this date |
 | `lookupLimit` | integer | Max items to scan (default 5000). Increase if searching far back in history |
+
+### Branch Filtering (Important)
+
+**By default, build queries only return builds from the default branch.** If results are missing, the builds likely ran on a non-default branch.
+
+- **`branch:default:any`** — all branches. Use when the user doesn't specify a branch or mentions working on a non-default branch. If a query returns 0 results unexpectedly, retry with this.
+- **`branch:<name>`** — exact branch (e.g., `branch:my-feature`). Use when the user asks about a specific branch.
+- *(omitted)* — default branch only.
+
+Include `branchName` in `fields` when querying across branches.
 
 Use `${'$'}help` to discover supported locator dimensions: `path=/app/rest/builds/${'$'}help`
 
@@ -234,7 +244,9 @@ query: locator=project:(id:MyProject)&fields=buildType(id,name)
 
 ### "What's the status of project X?"
 1. List its build configs: `path=/app/rest/projects/id:PROJECT_ID` `query=fields=id,name,buildTypes(buildType(id,name))`
-2. Get latest build per config: `path=/app/rest/builds` `query=locator=buildType:(id:BT_ID),defaultFilter:true,count:1&fields=build(id,number,status,finishOnAgentDate)`
+2. Get latest build per config: `path=/app/rest/builds` `query=locator=buildType:(id:BT_ID),branch:default:any,defaultFilter:true,count:1&fields=build(id,number,status,branchName,finishOnAgentDate)`
+
+**Note**: Use `branch:default:any` to see the latest build regardless of branch. Without it, you only see the default branch.
 
 ### "Find failing tests"
 ```
@@ -263,8 +275,17 @@ Trigger types: `user` (manual), `vcs` (VCS change), `schedule` (cron), `snapshot
 
 ### "Get last successful build"
 ```
+# Default branch only
 path: /app/rest/builds
 query: locator=buildType:(id:BT_ID),status:SUCCESS,defaultFilter:true,count:1&fields=build(id,number,finishOnAgentDate)
+
+# Across all branches (use when user doesn't specify a branch or works on a non-default branch)
+path: /app/rest/builds
+query: locator=buildType:(id:BT_ID),status:SUCCESS,branch:default:any,defaultFilter:true,count:1&fields=build(id,number,branchName,finishOnAgentDate)
+
+# Specific branch
+path: /app/rest/builds
+query: locator=buildType:(id:BT_ID),status:SUCCESS,branch:feature-login,count:1&fields=build(id,number,branchName,finishOnAgentDate)
 ```
 
 ## Key Endpoints Reference
@@ -446,9 +467,9 @@ API schema: `path=/app/rest/swagger.json`
 
 ## Tips
 
+- **Branches matter**: By default, queries return only default-branch builds. Use `branch:default:any` to search across all branches. When triggering builds, specify `branchName` if the user works on a non-default branch. See **Branch Filtering** above.
 - **Start with `fields=count`** to gauge result size before fetching data.
 - **Use `defaultFilter:true`** to exclude personal and canceled builds.
-- **Use `branch:default:any`** to search across all branches.
 - **Use `affectedProject` instead of `project`** to include subprojects.
 - **Build IDs are globally unique**; build numbers are only unique within a configuration.
 - **Use `state:any`** if you want queued, running, and finished builds together.
@@ -485,12 +506,14 @@ The body must be a **JSON object** (not an array or primitive). The tool parses,
 
 ### Trigger a Build
 
-Minimal:
+**Important**: If you omit `branchName`, the build runs on the **default branch**. If the user is working on a non-default branch or mentions a specific branch, always include `branchName`. When unsure, ask the user which branch to build.
+
+Minimal (runs on default branch):
 ```json
 {"buildType": {"id": "MyBuildConfig_Build"}}
 ```
 
-With branch:
+With branch (**recommended** — always specify when the user works on a non-default branch):
 ```json
 {"buildType": {"id": "MyBuildConfig_Build"}, "branchName": "feature-branch"}
 ```
@@ -561,6 +584,7 @@ Same JSON envelope as `teamcity_rest_get`:
 
 - **Always use `fields`** in your request to keep the response manageable.
 - **Find the build config ID first** using `teamcity_rest_get` before triggering a build.
+- **Always ask or infer the target branch** — without `branchName`, the build runs on the default branch. If the user mentions working on a branch or the context suggests a non-default branch, include `branchName` in the request body.
 - **Use `branchName`** to target a specific branch. TeamCity picks up Kotlin DSL settings from that branch, so you can test build configuration changes without committing to main.
 - **Add a `comment`** to document why the build was triggered.
 - **Monitor after triggering** — use `teamcity_rest_get` with the returned build ID to track progress.

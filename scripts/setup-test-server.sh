@@ -25,6 +25,15 @@ set -euo pipefail
 : "${TC_DIST:?TC_DIST must be set to the path of TeamCity-*.tar.gz}"
 : "${PLUGIN_ZIP:?PLUGIN_ZIP must be set to the path of mcp.zip}"
 
+# Resolve glob patterns (e.g. temp/TeamCity-*.tar.gz)
+# shellcheck disable=SC2086
+TC_DIST_RESOLVED=( $TC_DIST )
+if [ ${#TC_DIST_RESOLVED[@]} -eq 0 ]; then
+    echo "ERROR: TC_DIST pattern '$TC_DIST' did not match any files"
+    exit 1
+fi
+TC_DIST="${TC_DIST_RESOLVED[0]}"
+
 TC_HOME="${TC_HOME:-teamcity-home}"
 TC_PORT="${TC_PORT:-8111}"
 TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,introduce_yourself}"

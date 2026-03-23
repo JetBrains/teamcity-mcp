@@ -31,6 +31,7 @@ dependencies {
     //teamcity
     provided("org.jetbrains.teamcity.internal:server:${teamcityVersion}")
     provided("org.jetbrains.teamcity.internal:web:${teamcityVersion}")
+    provided("org.jetbrains.teamcity.internal:fus-events-model:${teamcityVersion}")
 
     implementation(libs.mcp)
 

@@ -1,40 +1,42 @@
 package jetbrains.buildServer.ai.mcp.events
 
 import io.mockk.*
-import jetbrains.buildServer.serverSide.auth.SecurityContext
+import jetbrains.buildServer.serverSide.ServerResponsibilityImpl
+import jetbrains.buildServer.serverSide.impl.auth.SecurityContextImpl
 import jetbrains.buildServer.serverSide.impl.fus.FusRegistry
 import jetbrains.buildServer.users.SUser
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
 import org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.*
 
 class FusMcpEventHandlerTest {
 
     private lateinit var fusRegistry: FusRegistry
     private lateinit var handler: FusMcpEventHandler
-    private lateinit var securityContext: SecurityContext
 
     @BeforeEach
     fun setUp() {
         fusRegistry = mockk(relaxed = true)
-        securityContext = mockk(relaxed = true)
-        handler = FusMcpEventHandler(fusRegistry, securityContext)
+        handler = FusMcpEventHandler(fusRegistry, SecurityContextImpl(ServerResponsibilityImpl()))
+        SecurityContextHolder.clearContext()
     }
 
     @AfterEach
     fun tearDown() {
+        SecurityContextHolder.clearContext()
         unmockkAll()
     }
 
     private fun setSecurityUser(userId: Long) {
-        // Deep-stub the security context chain: authorityHolder.associatedUser?.id
         val user = mockk<SUser>()
         every { user.id } returns userId
-        val authorityHolder = mockk<jetbrains.buildServer.serverSide.auth.AuthorityHolder>()
-        every { authorityHolder.associatedUser } returns user
-        every { securityContext.authorityHolder } returns authorityHolder
+        every { user.associatedUser } returns user
+        val auth = UsernamePasswordAuthenticationToken(user, null)
+        SecurityContextHolder.getContext().authentication = auth
     }
 
     @Nested
@@ -50,9 +52,9 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<RequestSessionEvent> {
                     it.userId == "42" &&
-                    it.requestedProtocolVersion == "2025-11-25" &&
-                    it.mcpClientToolName == "claude-code" &&
-                    it.mcpClientToolVersion == "2.1.50"
+                            it.requestedProtocolVersion == "2025-11-25" &&
+                            it.mcpClientToolName == "claude-code" &&
+                            it.mcpClientToolVersion == "2.1.50"
                 })
             }
         }
@@ -66,9 +68,9 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<RequestSessionEvent> {
                     it.userId == "7" &&
-                    it.requestedProtocolVersion == "2025-11-25" &&
-                    it.mcpClientToolName == null &&
-                    it.mcpClientToolVersion == null
+                            it.requestedProtocolVersion == "2025-11-25" &&
+                            it.mcpClientToolName == null &&
+                            it.mcpClientToolVersion == null
                 })
             }
         }
@@ -82,7 +84,7 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<RequestSessionEvent> {
                     it.requestedProtocolVersion == null &&
-                    it.mcpClientToolName == "test"
+                            it.mcpClientToolName == "test"
                 })
             }
         }
@@ -96,7 +98,7 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<RequestSessionEvent> {
                     it.mcpClientToolName == null &&
-                    it.mcpClientToolVersion == null
+                            it.mcpClientToolVersion == null
                 })
             }
         }
@@ -110,7 +112,7 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<RequestSessionEvent> {
                     it.mcpClientToolName == null &&
-                    it.mcpClientToolVersion == "1.0"
+                            it.mcpClientToolVersion == "1.0"
                 })
             }
         }
@@ -129,9 +131,9 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<SessionStartedEvent> {
                     it.userId == "42" &&
-                    it.mcpSessionId == "session-123" &&
-                    it.mcpClientToolName == "cursor" &&
-                    it.mcpClientToolVersion == "0.50.1"
+                            it.mcpSessionId == "session-123" &&
+                            it.mcpClientToolName == "cursor" &&
+                            it.mcpClientToolVersion == "0.50.1"
                 })
             }
         }
@@ -145,8 +147,8 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<SessionStartedEvent> {
                     it.mcpSessionId == "s1" &&
-                    it.mcpClientToolName == null &&
-                    it.mcpClientToolVersion == null
+                            it.mcpClientToolName == null &&
+                            it.mcpClientToolVersion == null
                 })
             }
         }
@@ -164,8 +166,8 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<ExistingSessionMessageReceivedEvent> {
                     it.userId == "42" &&
-                    it.mcpSessionId == "session-123" &&
-                    it.methodName == "tools/list"
+                            it.mcpSessionId == "session-123" &&
+                            it.methodName == "tools/list"
                 })
             }
         }
@@ -179,7 +181,7 @@ class FusMcpEventHandlerTest {
             verify(exactly = 1) {
                 fusRegistry.logEvent(match<ExistingSessionMessageReceivedEvent> {
                     it.mcpSessionId == "s1" &&
-                    it.methodName == null
+                            it.methodName == null
                 })
             }
         }
@@ -212,20 +214,19 @@ class FusMcpEventHandlerTest {
             }
         }
 
-        //todo: what we want to test here?
-//        @Test
-//        fun `uses empty string when authentication principal is not SUser`() {
-//            val auth = UsernamePasswordAuthenticationToken("string-principal", null)
-//            SecurityContextHolder.getContext().authentication = auth
-//
-//            handler.onEvent(McpEvent.MessageReceived("s1", "ping"))
-//
-//            verify(exactly = 1) {
-//                fusRegistry.logEvent(match<ExistingSessionMessageReceivedEvent> {
-//                    it.userId == ""
-//                })
-//            }
-//        }
+        @Test
+        fun `uses empty string when authentication principal is not SUser`() {
+            val auth = UsernamePasswordAuthenticationToken("string-principal", null)
+            SecurityContextHolder.getContext().authentication = auth
+
+            handler.onEvent(McpEvent.MessageReceived("s1", "ping"))
+
+            verify(exactly = 1) {
+                fusRegistry.logEvent(match<ExistingSessionMessageReceivedEvent> {
+                    it.userId == ""
+                })
+            }
+        }
     }
 
     @Nested
@@ -253,7 +254,7 @@ class FusMcpEventHandlerTest {
                 jetbrains.buildServer.serverSide.TeamCityProperties.getBooleanOrTrue("teamcity.ai.mcp.fus.enabled")
             } returns false
 
-            val toggleHandler = FusMcpEventHandler(fusRegistry, securityContext)
+            val toggleHandler = FusMcpEventHandler(fusRegistry, SecurityContextImpl(ServerResponsibilityImpl()))
 
             toggleHandler.onEvent(McpEvent.InitializeRequested("2025-11-25", null))
             toggleHandler.onEvent(McpEvent.SessionStarted("s1", null))

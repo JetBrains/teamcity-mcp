@@ -38,14 +38,9 @@ class FusMcpEventHandler(
     }
 
     private fun logInitializeRequested(event: McpEvent.InitializeRequested) {
-        val currentUserId = getCurrentUserId()
-        if (currentUserId == null) {
-            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
-            return
-        }
         val (clientName, clientVersion) = parseClientInfo(event.clientInfo)
         val fusEvent = RequestSessionEvent(
-            userId = currentUserId,
+            userId = getCurrentUserIdOrEmpty(),
             requestedProtocolVersion = event.protocolVersion,
             mcpClientToolName = clientName,
             mcpClientToolVersion = clientVersion
@@ -55,14 +50,9 @@ class FusMcpEventHandler(
     }
 
     private fun logSessionStarted(event: McpEvent.SessionStarted) {
-        val currentUserId = getCurrentUserId()
-        if (currentUserId == null) {
-            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
-            return
-        }
         val (clientName, clientVersion) = parseClientInfo(event.clientInfo)
         val fusEvent = SessionStartedEvent(
-            userId = currentUserId,
+            userId = getCurrentUserIdOrEmpty(),
             mcpSessionId = event.sessionId,
             mcpClientToolName = clientName,
             mcpClientToolVersion = clientVersion
@@ -72,13 +62,8 @@ class FusMcpEventHandler(
     }
 
     private fun logMessageReceived(event: McpEvent.MessageReceived) {
-        val currentUserId = getCurrentUserId()
-        if (currentUserId == null) {
-            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
-            return
-        }
         val fusEvent = ExistingSessionMessageReceivedEvent(
-            userId = currentUserId,
+            userId = getCurrentUserIdOrEmpty(),
             mcpSessionId = event.sessionId,
             methodName = event.method
         )
@@ -86,7 +71,7 @@ class FusMcpEventHandler(
         fusRegistry.logEvent(fusEvent)
     }
 
-    private fun getCurrentUserId() = securityContext.authorityHolder.associatedUser?.id?.toString()
+    private fun getCurrentUserIdOrEmpty() = securityContext.authorityHolder.associatedUser?.id?.toString() ?: ""
 
     private fun parseClientInfo(clientInfo: String?): Pair<String?, String?> {
         if (clientInfo == null) return null to null

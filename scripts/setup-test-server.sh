@@ -59,11 +59,17 @@ if [ -f "$TC_HOME/bin/teamcity-server.sh" ]; then
     "$TC_HOME/bin/teamcity-server.sh" stop 2>/dev/null || true
     sleep 5
 fi
-if command -v fuser &>/dev/null; then
+# Kill anything still holding the port. Use lsof (works on both macOS and Linux).
+if command -v lsof &>/dev/null; then
+    lsof -ti :"$TC_PORT" | xargs kill -9 2>/dev/null || true
+elif command -v fuser &>/dev/null; then
     fuser -k "${TC_PORT}/tcp" 2>/dev/null || true
-elif command -v lsof &>/dev/null; then
-    lsof -ti :"$TC_PORT" | xargs kill 2>/dev/null || true
 fi
+# Wait until the port is actually free
+for _i in $(seq 1 30); do
+    if ! lsof -ti :"$TC_PORT" &>/dev/null; then break; fi
+    sleep 1
+done
 
 # ── Clean & extract ──────────────────────────────────────────────────────────
 

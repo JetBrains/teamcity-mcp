@@ -1,8 +1,12 @@
+import com.github.jk1.license.filter.DependencyFilter
+import com.github.jk1.license.filter.LicenseBundleNormalizer
+import com.github.jk1.license.render.JsonReportRenderer
 import java.text.SimpleDateFormat
 import java.util.Date
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.jk1.license)
     alias(libs.plugins.rodm.teamcity.server)
     id("idea")
 }
@@ -138,6 +142,21 @@ teamcity {
         archiveName = "mcp"
         allowSnapshotVersions = true
     }
+}
+
+licenseReport {
+    renderers = arrayOf(JsonReportRenderer("third-party-libraries.json"))
+    excludes = arrayOf(
+        "org.jetbrains.*",
+        "com.jetbrains.*",
+        ".*jackson-bom*",
+        "org.slf4j:slf4j-api",
+        "org.junit:*",
+        "org.junit.*:*"
+    )
+    filters = arrayOf<DependencyFilter>(
+        LicenseBundleNormalizer("${project.rootDir}/license-third-party-normalizer.json", false)
+    )
 }
 
 fun anyParam(name: String): String? = (rootProject.findProperty(name) ?: System.getProperty(name) ?: System.getenv(name)) as? String

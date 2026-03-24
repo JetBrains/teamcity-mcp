@@ -1,8 +1,8 @@
 package jetbrains.buildServer.ai.mcp.events
 
 import com.intellij.openapi.diagnostic.Logger
-import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.serverSide.TeamCityProperties
+import jetbrains.buildServer.serverSide.auth.SecurityContext
 import jetbrains.buildServer.serverSide.impl.fus.FusRegistry
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -15,7 +15,7 @@ private const val MCP_FUS_ENABLED = "teamcity.ai.mcp.fus.enabled"
 @Component
 class FusMcpEventHandler(
     private val fusRegistry: FusRegistry,
-    private val securityContext: SecurityContextEx
+    private val securityContext: SecurityContext
 ) : McpEventHandler {
 
     companion object {
@@ -38,9 +38,14 @@ class FusMcpEventHandler(
     }
 
     private fun logInitializeRequested(event: McpEvent.InitializeRequested) {
+        val currentUserId = getCurrentUserId()
+        if (currentUserId == null) {
+            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
+            return
+        }
         val (clientName, clientVersion) = parseClientInfo(event.clientInfo)
         val fusEvent = RequestSessionEvent(
-            userId = getCurrentUserId(),
+            userId = currentUserId,
             requestedProtocolVersion = event.protocolVersion,
             mcpClientToolName = clientName,
             mcpClientToolVersion = clientVersion
@@ -50,9 +55,14 @@ class FusMcpEventHandler(
     }
 
     private fun logSessionStarted(event: McpEvent.SessionStarted) {
+        val currentUserId = getCurrentUserId()
+        if (currentUserId == null) {
+            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
+            return
+        }
         val (clientName, clientVersion) = parseClientInfo(event.clientInfo)
         val fusEvent = SessionStartedEvent(
-            userId = getCurrentUserId(),
+            userId = currentUserId,
             mcpSessionId = event.sessionId,
             mcpClientToolName = clientName,
             mcpClientToolVersion = clientVersion
@@ -62,8 +72,13 @@ class FusMcpEventHandler(
     }
 
     private fun logMessageReceived(event: McpEvent.MessageReceived) {
+        val currentUserId = getCurrentUserId()
+        if (currentUserId == null) {
+            LOGGER.warn("Could not get current user ID. Skipping FUS event.")
+            return
+        }
         val fusEvent = ExistingSessionMessageReceivedEvent(
-            userId = getCurrentUserId(),
+            userId = currentUserId,
             mcpSessionId = event.sessionId,
             methodName = event.method
         )

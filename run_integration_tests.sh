@@ -41,7 +41,7 @@ if [ -n "${TC_DIST:-}" ]; then
     # Source the generated env file
     # shellcheck source=/dev/null
     source .test-server.env
-    export TC_SERVER_URL TC_SERVER_TOKEN TC_SERVER_RESTRICTED_TOKEN
+    export TC_SERVER_URL TC_SERVER_TOKEN TC_SERVER_RESTRICTED_TOKEN TC_HOME
 
     # Ensure server is stopped on exit
     trap 'scripts/stop-test-server.sh' EXIT
@@ -51,10 +51,12 @@ fi
 
 : "${TC_SERVER_URL:?TC_SERVER_URL must be set (or provide TC_DIST for automatic setup)}"
 : "${TC_SERVER_TOKEN:?TC_SERVER_TOKEN must be set (or provide TC_DIST for automatic setup)}"
+: "${TC_HOME:?TC_HOME must be set}"
 
 GRADLE_ARGS=(
     -DTC_SERVER_URL="$TC_SERVER_URL"
     -DTC_SERVER_TOKEN="$TC_SERVER_TOKEN"
+    -DTC_HOME="$TC_HOME"
 )
 
 if [ -n "${TC_SERVER_RESTRICTED_TOKEN:-}" ]; then

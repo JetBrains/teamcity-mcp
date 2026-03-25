@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tests.e2e
 
 import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
 import jetbrains.buildServer.ai.mcp.framework.e2e.AgentOutput
+import jetbrains.buildServer.ai.mcp.framework.e2e.FusLogAssertions
 import jetbrains.buildServer.ai.mcp.framework.e2e.ScriptRunner
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -114,6 +115,13 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
             .assertGeminiSuccess("tool call")
             .assertToolCalled("introduce_yourself")
             .assertOutputContains("RESULT:")
+
+        FusLogAssertions.assertFusEventsLogged(
+            "ai.mcp.session.requested",
+            "ai.mcp.session.started",
+            "ai.mcp.session.message.received",
+            message = "Gemini agent FUS events"
+        )
     }
 
     @Test

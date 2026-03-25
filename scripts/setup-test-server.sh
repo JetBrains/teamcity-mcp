@@ -97,6 +97,9 @@ cat > "$TEAMCITY_DATA_PATH/config/internal.properties" <<PROPS
 teamcity.licenseAgreement.accepted=true
 teamcity.ai.mcp.tools.enabled=${TC_MCP_TOOLS}
 teamcity.ai.mcp.resources.enabled=${TC_MCP_RESOURCES}
+teamcity.internal.fus.debugToLogs=true
+teamcity.internal.fus.flushInterval=5000
+teamcity.development.mode=true
 PROPS
 
 # ── Start server ─────────────────────────────────────────────────────────────

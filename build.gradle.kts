@@ -107,7 +107,7 @@ val integrationTest by tasks.registering(Test::class) {
         showStandardStreams = true
     }
 
-    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN", "TC_SERVER_RESTRICTED_TOKEN").forEach { key ->
+    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN", "TC_SERVER_RESTRICTED_TOKEN", "TC_HOME").forEach { key ->
         anyParam(key)?.let { systemProperty(key, it) }
     }
 }
@@ -128,7 +128,7 @@ val e2eTest by tasks.registering(Test::class) {
         showStandardStreams = true
     }
 
-    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "JUNIE_API_KEY").forEach { key ->
+    listOf("TC_SERVER_URL", "TC_SERVER_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "JUNIE_API_KEY", "TC_HOME").forEach { key ->
         anyParam(key)?.let { systemProperty(key, it) }
     }
 }

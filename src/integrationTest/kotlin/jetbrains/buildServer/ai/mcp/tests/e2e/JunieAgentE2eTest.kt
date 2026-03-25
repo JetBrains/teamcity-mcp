@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tests.e2e
 
 import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
 import jetbrains.buildServer.ai.mcp.framework.e2e.AgentOutput
+import jetbrains.buildServer.ai.mcp.framework.e2e.FusLogAssertions
 import jetbrains.buildServer.ai.mcp.framework.e2e.ScriptRunner
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -110,6 +111,13 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
                 "Hello, Junie", "TeamCity MCP server",
                 message = "introduce_yourself tool must have been called and returned a response"
             )
+
+        FusLogAssertions.assertFusEventsLogged(
+            "ai.mcp.session.requested",
+            "ai.mcp.session.started",
+            "ai.mcp.session.message.received",
+            message = "Junie agent FUS events"
+        )
     }
 
     @Test

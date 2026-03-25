@@ -99,6 +99,9 @@ teamcity.ai.mcp.braveMode.enabled=true
 teamcity.ai.mcp.pipeline.enabled=true
 teamcity.ai.mcp.tools.enabled=${TC_MCP_TOOLS}
 teamcity.ai.mcp.resources.enabled=${TC_MCP_RESOURCES}
+teamcity.internal.fus.debugToLogs=true
+teamcity.internal.fus.flushInterval=5000
+teamcity.development.mode=true
 PROPS
 
 # ── Start server ─────────────────────────────────────────────────────────────

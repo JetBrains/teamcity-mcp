@@ -35,6 +35,9 @@ dependencies {
     //teamcity
     provided("org.jetbrains.teamcity.internal:server:${teamcityVersion}")
     provided("org.jetbrains.teamcity.internal:web:${teamcityVersion}")
+    provided("org.jetbrains.teamcity.internal:fus-events-model:${teamcityVersion}")
+    //needed to set explicitly to not take the server-web-api as transitive deps from the io.github.rodm.teamcity-server plugin on the compile stage
+    provided("org.jetbrains.teamcity:server-web-api:${teamcityVersion}")
 
     implementation(libs.mcp)
 

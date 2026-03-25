@@ -4,6 +4,7 @@ mcp = "0.8.4"
 junit = "5.10.2"
 mockk = "1.13.10"
 ktor = "3.2.3"
+jk1 = "2.7"
 
 [libraries]
 mcp = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = "mcp" }
@@ -17,4 +18,5 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk"}
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+jk1-license = { id = "com.github.jk1.dependency-license-report", version.ref = "jk1" }
 rodm-teamcity-server = { id = "io.github.rodm.teamcity-server", version = "1.5.6" }

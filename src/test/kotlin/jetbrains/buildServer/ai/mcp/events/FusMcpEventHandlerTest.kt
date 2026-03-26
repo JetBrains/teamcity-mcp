@@ -21,7 +21,12 @@ class FusMcpEventHandlerTest {
     @BeforeEach
     fun setUp() {
         fusRegistry = mockk(relaxed = true)
-        handler = FusMcpEventHandler(fusRegistry, SecurityContextImpl(ServerResponsibilityImpl()))
+        handler = object : FusMcpEventHandler(
+            fusRegistry,
+            SecurityContextImpl(ServerResponsibilityImpl())
+        ) {
+            override fun areFusEventClassesPresent(): Boolean = true
+        }
         SecurityContextHolder.clearContext()
     }
 
@@ -263,6 +268,24 @@ class FusMcpEventHandlerTest {
             verify(exactly = 0) { fusRegistry.logEvent(any()) }
 
             unmockkStatic(jetbrains.buildServer.serverSide.TeamCityProperties::class)
+        }
+
+        @Test
+        fun `does not log events when MCP FUS event classes are unavailable`() {
+            setSecurityUser(1)
+
+            val handlerWithoutFusClasses = object : FusMcpEventHandler(
+                fusRegistry,
+                SecurityContextImpl(ServerResponsibilityImpl())
+            ) {
+                override fun areFusEventClassesPresent(): Boolean = false
+            }
+
+            handlerWithoutFusClasses.onEvent(McpEvent.InitializeRequested("2025-11-25", null))
+            handlerWithoutFusClasses.onEvent(McpEvent.SessionStarted("s1", null))
+            handlerWithoutFusClasses.onEvent(McpEvent.MessageReceived("s1", "ping"))
+
+            verify(exactly = 0) { fusRegistry.logEvent(any()) }
         }
     }
 }

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 private const val MCP_FUS_ENABLED = "teamcity.ai.mcp.fus.enabled"
 
 @Component
-class FusMcpEventHandler(
+open class FusMcpEventHandler(
     private val fusRegistry: FusRegistry,
     private val securityContext: SecurityContext
 ) : McpEventHandler {
@@ -22,8 +22,10 @@ class FusMcpEventHandler(
         private val LOGGER = Logger.getInstance(FusMcpEventHandler::class.java.name)
     }
 
+    private val fusEventsPresent by lazy { areFusEventClassesPresent() }
+
     override fun onEvent(event: McpEvent) {
-        if (!TeamCityProperties.getBooleanOrTrue(MCP_FUS_ENABLED)) return
+        if (!TeamCityProperties.getBooleanOrTrue(MCP_FUS_ENABLED) || !fusEventsPresent) return
 
         try {
             when (event) {
@@ -34,6 +36,19 @@ class FusMcpEventHandler(
             }
         } catch (e: Throwable) {
             LOGGER.warnAndDebugDetails("Failed to send MCP FUS event", e)
+        }
+    }
+
+    protected open fun areFusEventClassesPresent(): Boolean {
+        return try {
+            Class.forName("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.SessionStartedEvent", false, FusMcpEventHandler::class.java.classLoader)
+            true
+        } catch (_: ClassNotFoundException) {
+            LOGGER.debug("FUS events classes for MCP are not present, completely skipping MCP FUS event logging")
+            false
+        } catch (e: Throwable) {
+            LOGGER.debug("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
+            false
         }
     }
 

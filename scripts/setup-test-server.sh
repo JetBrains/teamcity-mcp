@@ -36,8 +36,8 @@ TC_DIST="${TC_DIST_RESOLVED[0]}"
 
 TC_HOME="${TC_HOME:-teamcity-home}"
 TC_PORT="${TC_PORT:-8111}"
-TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,introduce_yourself}"
-TC_MCP_RESOURCES="${TC_MCP_RESOURCES:-rest_api_guide,build_failure_analysis_guide,introduce_yourself}"
+TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,teamcity_pipeline_get,teamcity_pipeline_post,introduce_yourself}"
+TC_MCP_RESOURCES="${TC_MCP_RESOURCES:-rest_api_guide,build_failure_analysis_guide,pipeline_guide,introduce_yourself}"
 TC_BASE_URL="http://localhost:${TC_PORT}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,6 +95,8 @@ mkdir -p "$TEAMCITY_DATA_PATH/system"
 echo "=== Writing internal properties ==="
 cat > "$TEAMCITY_DATA_PATH/config/internal.properties" <<PROPS
 teamcity.licenseAgreement.accepted=true
+teamcity.ai.mcp.braveMode.enabled=true
+teamcity.ai.mcp.pipeline.enabled=true
 teamcity.ai.mcp.tools.enabled=${TC_MCP_TOOLS}
 teamcity.ai.mcp.resources.enabled=${TC_MCP_RESOURCES}
 PROPS
@@ -162,6 +164,23 @@ for bt in '{"id":"McpPermissionVisible_Build","name":"Visible Build","project":{
     echo ""
 done
 echo "Permission visibility fixtures created"
+
+# ── Create pipeline fixture ──────────────────────────────────────────────────
+
+echo "=== Creating pipeline fixture ==="
+curl -sf -u "admin:admin" -X POST "${TC_BASE_URL}/app/pipeline" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json" \
+    -d '{
+      "name":"MCP Seeded Pipeline",
+      "yaml":"jobs:\n  Job1:\n    name: Seed Job\n    runs-on: Linux-Medium\n    steps: []\n",
+      "additionalVcsRoots":[],
+      "triggers":[],
+      "integrations":[],
+      "notifications":[]
+    }'
+echo ""
+echo "Pipeline fixture created"
 
 # ── Create access tokens ────────────────────────────────────────────────────
 

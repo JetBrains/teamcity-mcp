@@ -10,6 +10,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import jetbrains.buildServer.ai.mcp.resources.McpResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
@@ -92,12 +94,34 @@ class McpServerConfigurator(
     }
 
     internal fun getEnabledTools(): List<McpTool> {
-        val enabledSet = settingsService.getEnabledToolNames() ?: return allTools
+        val enabledSet = settingsService.getEnabledToolNames()
         return allTools.filter { it.name in enabledSet }
     }
 
     internal fun getEnabledResources(): List<McpResource> {
         val enabledSet = settingsService.getEnabledResourceNames()
-        return allResources.filter { it.shortName in enabledSet }
+        val enabled = allResources.filter { it.shortName in enabledSet }
+
+        return enabled
+            .groupBy { it.uri }
+            .values
+            .map { resourcesForUri ->
+                when {
+                    resourcesForUri.size == 1 -> resourcesForUri.first()
+                    resourcesForUri.any { it is PipelineBraveGuideResource || it is PipelineReadOnlyGuideResource } ->
+                        selectPipelineGuide(resourcesForUri)
+                    else -> resourcesForUri.first()
+                }
+            }
+    }
+
+    private fun selectPipelineGuide(resourcesForUri: List<McpResource>): McpResource {
+        val preferredClass = if (settingsService.isBraveModeEnabled()) {
+            PipelineBraveGuideResource::class.java
+        } else {
+            PipelineReadOnlyGuideResource::class.java
+        }
+
+        return resourcesForUri.firstOrNull { preferredClass.isInstance(it) } ?: resourcesForUri.first()
     }
 }

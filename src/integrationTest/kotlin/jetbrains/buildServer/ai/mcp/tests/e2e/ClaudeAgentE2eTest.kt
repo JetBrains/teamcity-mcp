@@ -4,6 +4,7 @@ import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
 import jetbrains.buildServer.ai.mcp.framework.e2e.ScriptRunner
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
  * End-to-end tests that run Claude Code inside a Docker container against
@@ -124,6 +125,36 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 "SERVER:", "version",
                 message = "agent must report server info retrieved via REST tool"
             )
+    }
+
+    @Test
+    fun `agent uses pipeline get tool when pipeline support is enabled`() {
+        mcpClient().use { client ->
+            client.withSession {
+                val toolNames = listTools().map { it.name }.toSet()
+                assumeTrue(
+                    "teamcity_pipeline_get" in toolNames,
+                    "Pipeline tool support is not enabled on this server (tools: $toolNames) — skipping"
+                )
+                ensureSeededPipeline()
+            }
+        }
+
+        val output = scripts.run("claude-agent.sh",
+            listOf("run-prompt", CONTAINER_NAME,
+                "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
+                    "Then print one line starting with:\n" +
+                    "PIPELINES: <short summary of what was returned>\n" +
+                    "The summary must explicitly mention the pipeline named \"" + seededPipelineName + "\" if it is present.\n" +
+                    "If the response is a JSON array, include how many pipeline objects it contains.",
+                findApiKey()!!))
+
+        output.dump("pipeline tool")
+            .assertNoErrors()
+            .assertExitCode(0, "pipeline tool")
+            .assertToolCalled("teamcity_pipeline_get")
+            .assertOutputContains("PIPELINES:")
+            .assertOutputContains(seededPipelineName, "agent must report the seeded pipeline name")
     }
 
     @Test

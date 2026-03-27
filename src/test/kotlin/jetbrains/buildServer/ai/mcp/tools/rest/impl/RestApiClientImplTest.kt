@@ -192,6 +192,7 @@ class RestApiClientImplTest {
 
     @Test
     fun `returns 503 when controller not found`() {
+        every { fakeHttpRequestsFactory.get(any(), any()) } returns FakeHttpServletRequest()
         every { urlMapping.handlerMap } returns emptyMap()
 
         val result = runBlocking {

@@ -4,6 +4,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
 import jetbrains.buildServer.ai.mcp.resources.McpResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
@@ -195,6 +197,34 @@ class McpServerConfiguratorTest {
             val configurator = configurator(resources = resources)
             val server = configurator.configureServer()
             assertTrue(configurator.getEnabledResources().isEmpty())
+        }
+
+        @Test
+        fun `getEnabledResources selects only read only pipeline guide when brave mode is off`() {
+            every { settingsService.getEnabledResourceNames() } returns setOf("pipeline_guide")
+            every { settingsService.isBraveModeEnabled() } returns false
+
+            val configurator = configurator(
+                resources = listOf(PipelineReadOnlyGuideResource(), PipelineBraveGuideResource())
+            )
+
+            val enabled = configurator.getEnabledResources()
+            assertEquals(1, enabled.size)
+            assertTrue(enabled.single() is PipelineReadOnlyGuideResource)
+        }
+
+        @Test
+        fun `getEnabledResources selects only brave pipeline guide when brave mode is on`() {
+            every { settingsService.getEnabledResourceNames() } returns setOf("pipeline_guide")
+            every { settingsService.isBraveModeEnabled() } returns true
+
+            val configurator = configurator(
+                resources = listOf(PipelineReadOnlyGuideResource(), PipelineBraveGuideResource())
+            )
+
+            val enabled = configurator.getEnabledResources()
+            assertEquals(1, enabled.size)
+            assertTrue(enabled.single() is PipelineBraveGuideResource)
         }
     }
 

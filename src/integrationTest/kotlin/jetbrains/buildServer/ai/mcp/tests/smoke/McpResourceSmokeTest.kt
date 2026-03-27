@@ -151,6 +151,43 @@ class McpResourceSmokeTest : McpIntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `resources list contains pipelines guide resource`() {
+        mcpClient().use { client ->
+            client.withSession {
+                val resources = listResources()
+                val uris = resources.map { it.uri }
+                assumeTrue(
+                    "teamcity://guides/pipelines" in uris,
+                    "Pipelines guide resource not enabled on this server (enabled: $uris) — skipping"
+                )
+                println("  ✓ Pipelines guide resource found")
+            }
+        }
+    }
+
+    @Test
+    fun `pipelines guide resource can be read and returns markdown`() {
+        mcpClient().use { client ->
+            client.withSession {
+                val uris = listResources().map { it.uri }
+                assumeTrue(
+                    "teamcity://guides/pipelines" in uris,
+                    "Pipelines guide resource not enabled on this server — skipping"
+                )
+
+                val contents = readResource("teamcity://guides/pipelines")
+                assertFalse(contents.isEmpty(), "Resource read must return content")
+                val content = contents.first()
+                assertEquals("text/markdown", content.mimeType, "Pipelines guide should have text/markdown mimeType")
+                assertTrue(content.text.contains("teamcity_pipeline_get"), "Guide should mention dedicated pipeline GET tool")
+                assertTrue(content.text.contains("/app/pipeline"), "Guide should describe /app/pipeline endpoints")
+                assertTrue(content.text.contains("/app/rest/pipelines"), "Guide should describe pipeline REST endpoints")
+                println("  ✓ Pipelines guide content length: ${content.text.length} chars")
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Reading non-existent resource
     // -----------------------------------------------------------------------

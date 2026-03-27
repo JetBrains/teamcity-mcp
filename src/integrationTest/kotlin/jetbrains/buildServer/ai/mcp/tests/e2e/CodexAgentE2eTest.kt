@@ -125,6 +125,35 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
     }
 
     @Test
+    fun `agent uses pipeline get tool when pipeline support is enabled`() {
+        mcpClient().use { client ->
+            client.withSession {
+                val toolNames = listTools().map { it.name }.toSet()
+                Assertions.assertTrue(
+                    "teamcity_pipeline_get" in toolNames,
+                    "Pipeline tool support must be enabled on this server for this test (tools: $toolNames)"
+                )
+                ensureSeededPipeline()
+            }
+        }
+
+        val output = scripts.run("codex-agent.sh",
+            listOf("run-prompt", CONTAINER_NAME,
+                "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
+                    "Then print one line starting with:\n" +
+                    "PIPELINES: <short summary of what was returned>\n" +
+                    "The summary must explicitly mention the pipeline named \"" + seededPipelineName + "\" if it is present.\n" +
+                    "If the response is a JSON array, include how many pipeline objects it contains.",
+                findApiKey()!!, serverConfig.bearerToken))
+
+        output.dump("pipeline tool")
+            .assertExitCode(0, "pipeline tool")
+            .assertToolCalled("teamcity_pipeline_get")
+            .assertOutputContains("PIPELINES:")
+            .assertOutputContains(seededPipelineName, "agent must report the seeded pipeline name")
+    }
+
+    @Test
     fun `agent discovers TeamCity MCP resources`() {
         val output = scripts.run("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,

@@ -1,8 +1,11 @@
 package jetbrains.buildServer.ai.mcp
 
 import jetbrains.buildServer.ai.mcp.resources.rest.BuildFailureAnalysisGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
-
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
@@ -10,25 +13,41 @@ import jetbrains.buildServer.serverSide.TeamCityProperties
 import org.springframework.stereotype.Service
 
 const val MCP_FEATURE_TOGGLE = "teamcity.ai.mcp.enabled"
+const val MCP_BRAVE_MODE_TOGGLE = "teamcity.ai.mcp.braveMode.enabled"
+const val MCP_PIPELINE_TOGGLE = "teamcity.ai.mcp.pipeline.enabled"
 const val MCP_TOOLS_ENABLED = "teamcity.ai.mcp.tools.enabled"
 const val MCP_RESOURCES_ENABLED = "teamcity.ai.mcp.resources.enabled"
 const val MCP_REST_POST_ALLOWED_PATHS = "teamcity.ai.mcp.rest.post.allowed.paths"
+const val MCP_PIPELINE_POST_ALLOWED_PATHS = "teamcity.ai.mcp.pipeline.post.allowed.paths"
 
 const val BUILD_QUEUE_PATH = "/app/rest/buildQueue"
 
 @Service
 class SettingsService {
 
-    // TODO: disable by default
     fun isMcpServerEnabled() = TeamCityProperties.getBooleanOrTrue(MCP_FEATURE_TOGGLE)
+
+    fun isPipelineEnabled() = TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE)
+
+    fun isBraveModeEnabled() = TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE)
 
     /**
      * Returns the set of enabled tool names.
      * Empty property: no tools enabled.
      */
     fun getEnabledToolNames(): Set<String> {
-        val raw = TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED)
-            ?: return setOf(RestGetTool.NAME, RestPostTool.NAME, BuildLogTool.NAME)
+        val raw = TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) ?: return buildSet {
+            add(RestGetTool.NAME)
+            add(RestPostTool.NAME)
+            add(BuildLogTool.NAME)
+
+            if (isPipelineEnabled()) {
+                add(PipelineGetTool.NAME)
+                if (isBraveModeEnabled()) {
+                    add(PipelinePostTool.NAME)
+                }
+            }
+        }
         if (raw.isBlank()) return emptySet()
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
@@ -39,7 +58,17 @@ class SettingsService {
      */
     fun getEnabledResourceNames(): Set<String> {
         val raw = TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED)
-            ?: return setOf(RestApiGuideResource.SETTINGS_NAME, BuildFailureAnalysisGuideResource.SETTINGS_NAME)
+            ?: return buildSet {
+                add(RestApiGuideResource.SETTINGS_NAME)
+                add(BuildFailureAnalysisGuideResource.SETTINGS_NAME)
+                if (isPipelineEnabled()) {
+                    if (isBraveModeEnabled()) {
+                        add(PipelineBraveGuideResource.SETTINGS_NAME)
+                    } else {
+                        add(PipelineReadOnlyGuideResource.SETTINGS_NAME)
+                    }
+                }
+            }
         if (raw.isBlank()) return emptySet()
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
@@ -54,4 +83,9 @@ class SettingsService {
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
 
+    fun getPipelinePostAllowedPaths(): Set<String>? {
+        val raw = TeamCityProperties.getPropertyOrNull(MCP_PIPELINE_POST_ALLOWED_PATHS) ?: return null
+        if (raw.isBlank()) return emptySet()
+        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
 }

@@ -5,6 +5,7 @@ import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
@@ -45,6 +46,7 @@ class SettingsService {
                 add(PipelineGetTool.NAME)
                 if (isBraveModeEnabled()) {
                     add(PipelinePostTool.NAME)
+                    add(PipelineDeleteTool.NAME)
                 }
             }
         }

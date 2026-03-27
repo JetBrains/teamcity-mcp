@@ -8,11 +8,10 @@ This guide teaches AI agents how to work with TeamCity Pipelines when MCP expose
 
 TeamCity Pipelines are the modern YAML-based alternative to classic TeamCity build chains. When a user describes a CI workflow as a pipeline, staged job flow, or chain of dependent jobs, first consider whether they mean a TeamCity Pipeline rather than a traditional build-chain configuration assembled from individual build configurations and snapshot dependencies.
 
-In this mode:
-- `teamcity_pipeline_get` tool is available
+Available tools: `teamcity_pipeline_get` (for `/app/pipeline` endpoints), `teamcity_rest_get` (for `/app/rest/pipelines` endpoints).
+Write operations (create, update, helpers) require brave mode with `teamcity_pipeline_post` and `teamcity_pipeline_delete`.
 
-Assumes familiarity with the **REST API Guide** for `fields`, locators, pagination, and response envelopes.
-For deep diagnosis of a failing pipeline job after you know its underlying build id, switch to `teamcity://guides/build-failure-analysis`.
+For build failure diagnosis after you have a job's build id, read the resource `teamcity://guides/build-failure-analysis`.
 
 ---
 
@@ -31,7 +30,7 @@ Important naming note:
 
 In MCP read-only mode:
 - use `teamcity_pipeline_get` for GET requests under `/app/pipeline...`
-- use `teamcity_rest_get` and `teamcity_rest_post` for `/app/rest/...`, including `/app/rest/pipelines...`
+- use `teamcity_rest_get` for `/app/rest/...` reads, including `/app/rest/pipelines...`
 
 ---
 
@@ -62,19 +61,15 @@ Conceptually:
 - **Pipeline jobs** play the role that individual build configurations often play in a classic chain.
 - **Pipeline runs** should be analyzed first as pipeline objects, then as underlying job builds when deeper diagnostics are needed.
 
-TeamCity exposes this split:
+Key GET endpoints available in read-only mode:
 - `GET /app/pipeline?parentProjectExtId=...` lists pipelines for a project
 - `GET /app/pipeline/{id}` reads one pipeline including its YAML
-- `GET /app/pipeline/{id}/parameters` lists parameter names available to that pipeline
+- `GET /app/pipeline/{id}/parameters` lists parameter names (may return 400 on some versions)
 - `GET /app/pipeline/provider/vcs...` endpoints discover providers and repositories
-- `POST /app/pipeline` creates a pipeline
-- `POST /app/pipeline/{id}` updates a pipeline
-- `POST /app/pipeline/schema/generate` generates YAML schema data
-- `POST /app/rest/pipelines/{pipelineId}/run` triggers debug-style runs with modified YAML
+- `GET /app/rest/pipelines/{id}/branches` lists branches
+- `GET /app/rest/pipelines/{id}/run/{runId}` reads a pipeline run
 
-So for agent reasoning:
-- treat `/app/pipeline` as the main product API for authoring, discovery, and editor assistance
-- treat `/app/rest/pipelines` as a secondary API for pipeline REST objects and selected runtime operations
+Write operations (`POST /app/pipeline`, `POST /app/pipeline/{id}`) require brave mode and `teamcity_pipeline_post` and `teamcity_pipeline_delete`.
 
 ---
 
@@ -173,23 +168,9 @@ query: fields=branch(name,default)
 
 ---
 
-# Running Pipelines
+# Inspecting Pipeline Runs
 
-## Debug or remote-style pipeline run with custom YAML
-
-Use `/app/rest/pipelines/{pipelineId}/run` for debug-style runs.
-It sends:
-- `debug`
-- `yaml`
-- optionally `branch`
-
-This still goes through `/app/rest/pipelines`, not `/app/pipeline`.
-
-Important caveats:
-- the current MCP `teamcity_rest_post` tool may block this call if the REST POST allowlist does not include the endpoint
-- if the MCP tool rejects the POST before it reaches TeamCity, report that as a tooling limitation, not as a pipeline validation failure
-
-## Poll the pipeline run
+Use `teamcity_rest_get` for pipeline run data:
 
 ```
 path: /app/rest/pipelines/MyPipeline/run/123456
@@ -197,230 +178,113 @@ query: fields=number,build(id,state,status,statusText,branchName,finishOnAgentDa
 ```
 
 When diagnosing failures:
-- read the pipeline run first
-- find the failed job entry and its underlying `build.id`
-- then switch to `teamcity://guides/build-failure-analysis` for the ordinary build/problem/test/log workflow
+- read the pipeline run first to find the failed job and its `build.id`
+- then use `teamcity://guides/build-failure-analysis` for build-level investigation
 
----
-
-# What Is Reachable Today
-
-- list pipelines: `GET /app/pipeline?parentProjectExtId=...` via `teamcity_pipeline_get`
-- get pipeline details and YAML: `GET /app/pipeline/{id}` via `teamcity_pipeline_get`
-- get available pipeline parameters: `GET /app/pipeline/{id}/parameters`
-- discover VCS providers, repositories, capabilities, and JDKs through `/app/pipeline/provider/...`
-- get pipeline optimizations, run optimizations, run VCS roots, and personal notifications through `/app/pipeline/...`
-- list branches: `GET /app/rest/pipelines/{id}/branches`
-- get pipeline run: `GET /app/rest/pipelines/{id}/run/{runId}`
-- inspect nested job builds through run details
-- inspect build/test/problem/log data for pipeline jobs
-- in some server configurations, trigger debug/custom-YAML runs via `POST /app/rest/pipelines/{id}/run`
-
----
-
-# Agent Rules of Thumb
-
-- Prefer `teamcity_pipeline_get` for product-style pipeline discovery, setup discovery, and editor reads.
-- Prefer `teamcity_rest_get` for pipeline run summaries, branch lists, and job-level runtime inspection.
-- If the task is "set up a pipeline", start by discovering the project context: existing pipelines, providers, repositories, and available parameters.
-- For a failed pipeline run, pivot quickly from the pipeline run to the failing job build id.
+Also available via `teamcity_rest_get`:
+- `GET /app/rest/pipelines/{id}/branches` — list branches
     """.trimIndent()
 
     fun brave(): String = """
 # TeamCity Pipelines Guide: Brave Mode
 
-This guide teaches AI agents how to work with TeamCity Pipelines when MCP exposes both read and write-style pipeline operations.
+TeamCity Pipelines are YAML-based CI configurations (alternative to classic build chains). Use pipeline reasoning when the user says "pipeline", refers to pipeline YAML, or describes a staged job flow.
 
-TeamCity Pipelines are the modern YAML-based alternative to classic TeamCity build chains. When a user describes a CI workflow as a pipeline, staged job flow, or chain of dependent jobs, first consider whether they mean a TeamCity Pipeline rather than a traditional build-chain configuration assembled from individual build configurations and snapshot dependencies.
+Available tools: `teamcity_pipeline_get`, `teamcity_pipeline_post`, `teamcity_pipeline_delete`, `teamcity_rest_get`, `teamcity_rest_post`.
+If `teamcity.ai.mcp.pipeline.post.allowed.paths` is set, only matching POST paths work.
 
-In this mode:
-- `teamcity_pipeline_get` is available
-- `teamcity_pipeline_post` is available
-- `teamcity.ai.mcp.pipeline.post.allowed.paths` narrows POST access only when it is explicitly set
-
-Assumes familiarity with the **REST API Guide** for `fields`, locators, pagination, and response envelopes.
-For deep diagnosis of a failing pipeline job after you know its underlying build id, switch to `teamcity://guides/build-failure-analysis`.
+For build failure diagnosis after you have a job's build id, read the resource `teamcity://guides/build-failure-analysis`.
 
 ---
 
-# Capability Split
+# Two API Surfaces
 
-Pipeline operations are split across two TeamCity HTTP surfaces:
+| Surface | Tool | Use for |
+|---------|------|---------|
+| `/app/pipeline` (singular) | `teamcity_pipeline_get` / `teamcity_pipeline_post` | CRUD, discovery, editor helpers |
+| `/app/rest/pipelines` (plural) | `teamcity_rest_get` / `teamcity_rest_post` (POST may require allowlist) | Pipeline runs, branches, debug runs |
 
-- **Primary pipeline controller API** under `/app/pipeline...`
-  Use this for normal pipeline CRUD, setup discovery, and editor-assistance workflows.
-- **Pipeline REST API** under `/app/rest/pipelines...`
-  Use this more selectively, mainly for debug runs and some pipeline-scoped SSH key operations.
-
-Important naming note:
-- the main controller path is **`/app/pipeline`** (singular), not `/app/pipelines`
-- the REST API path is **`/app/rest/pipelines`** (plural)
-
-In MCP brave mode:
-- use `teamcity_pipeline_get` for GET requests under `/app/pipeline...`
-- use `teamcity_pipeline_post` for POST requests under `/app/pipeline...`
-- use `teamcity_rest_get` and `teamcity_rest_post` for `/app/rest/...`, including `/app/rest/pipelines...`
-
-`/app/pipeline` support is independent from the REST tools because TeamCity handles these endpoints through multiple web controllers, not the single REST controller used for `/app/rest/...`.
-
-## Safety model
-
-- Pipeline support is controlled by `teamcity.ai.mcp.pipeline.enabled`
-- Brave mode is controlled by `teamcity.ai.mcp.braveMode.enabled`
-- when both are true, `teamcity_pipeline_get` and `teamcity_pipeline_post` are exposed
-- if `teamcity.ai.mcp.pipeline.post.allowed.paths` is absent, all pipeline POST paths are enabled
-- if `teamcity.ai.mcp.pipeline.post.allowed.paths` is present, only matching pipeline POST paths are enabled
-
-Important nuance:
-- several pipeline helper operations are POST endpoints even though they are logically "read-like"
-- examples: repository branch discovery, test connection, versioned settings checks, schema generation, parameter resolution, compatibility checks, job descriptions
-- those still require `teamcity_pipeline_post`
-- if `teamcity.ai.mcp.pipeline.post.allowed.paths` is configured, they must also match that configured path set
+Note: many "read-like" helpers (compatibility checks, schema generation) are POST endpoints and require `teamcity_pipeline_post`.
 
 ---
 
-# How Agents Should Think About Pipelines
+# End-to-End: Create and Run a Pipeline
 
-Use pipeline reasoning when the task is about:
-- a YAML file that defines jobs and dependencies
-- a staged CI flow that would otherwise be modeled as a build chain
-- a pipeline run, pipeline job, or pipeline-specific editor assistance
-
-For mixed cases:
-- start from the pipeline if the user says "pipeline", "pipeline run", or refers to pipeline YAML
-- then pivot to ordinary build-level investigation once you have a failing job build id
+1. **Discover context:** `GET /app/pipeline/provider/vcs?parentProjectExtId=...` (connections), `GET /app/pipeline/provider/jdk` (JDKs)
+2. **Create:** `POST /app/pipeline?parentProjectExtId=...` with a full pipeline draft (see Create section). Response returns the pipeline `id`.
+3. **Verify:** `POST /app/pipeline/{id}/compatibility/agents` with the same full pipeline draft as the body — check all jobs show `compatible: true`.
+4. **Trigger:** `POST /app/rest/buildQueue` via `teamcity_rest_post` with `{"buildType": {"id": "<pipeline-id>"}}`. The response contains the build `id` — this is the pipeline run id.
+5. **Monitor:** `GET /app/rest/builds/id:<buildId>` via `teamcity_rest_get` for high-level status. For per-job details: `GET /app/rest/pipelines/<pipeline-id>/run/<buildId>` with fields including `jobs(job(id,name,build(id,state,status,statusText)))`. On failure, see Diagnosing Failed Runs below.
 
 ---
 
-# TeamCity Pipeline Model
+# YAML Authoring
 
-A TeamCity pipeline is a project-owned YAML configuration. In the REST model:
-- the pipeline has an **external id** (`id`)
-- the backing project also has an **internal id** (`internalId`)
-- the pipeline has a **head build type**
-- the YAML can be returned inline from the pipeline resource
-- jobs are derived from the YAML
+Step field names map to TeamCity runner parameters. Key rules:
+- Every step MUST have a `type` field — omitting it causes a parse error.
+- Valid step types include: `script`, `gradle`, `maven`, `dotnet`, `docker`, `node-js`, etc. Use `POST /app/pipeline/schema/generate?pipelineId=...` to get the full list. **Warning:** unrecognized type values (e.g. `command-line`) are silently accepted but produce a build configuration with zero steps — the pipeline will appear valid but builds will never run. Always verify the type against the schema.
+- For command-line steps, use `type: script` with field `script-content` (NOT `script`). Wrong name → empty runner parameter → zero compatible agents.
+- Use `POST /app/pipeline/{id}/compatibility/agents` to verify steps are compatible with available agents before triggering a run. This endpoint requires the full pipeline draft as the request body (it does not use the stored pipeline definition).
 
-Conceptually:
-- **Pipelines** are the YAML-first alternative to old-school TeamCity build chains.
-- **Pipeline jobs** play the role that individual build configurations often play in a classic chain.
-- **Pipeline runs** should be analyzed first as pipeline objects, then as underlying job builds when deeper diagnostics are needed.
+Single-job example:
 
-TeamCity exposes this split:
-- `GET /app/pipeline?parentProjectExtId=...` lists pipelines for a project
-- `GET /app/pipeline/{id}` reads one pipeline including its YAML
-- `GET /app/pipeline/{id}/parameters` lists parameter names available to that pipeline
-- `GET /app/pipeline/provider/vcs...` endpoints discover providers and repositories
-- `POST /app/pipeline` creates a pipeline
-- `POST /app/pipeline/{id}` updates a pipeline
-- `POST /app/pipeline/schema/generate` generates YAML schema data
-- `POST /app/pipeline/repository/branches` resolves repository branches
-- `POST /app/pipeline/{id}/parameters/resolve` resolves parameter references
-- `POST /app/pipeline/{id}/job-descriptions`, `buildStepDescription`, and compatibility endpoints power editor assistance
-- `POST /app/rest/pipelines/{pipelineId}/run` triggers debug-style runs with modified YAML
+```yaml
+jobs:
+  Build:
+    name: My Build
+    steps:
+      - name: Run tests
+        type: script
+        script-content: |
+          echo "Running tests"
+          ./gradlew test
+```
 
-So for agent reasoning:
-- treat `/app/pipeline` as the main product API for authoring, discovery, and editor assistance
-- treat `/app/rest/pipelines` as a secondary API for pipeline REST objects and selected runtime operations
+Multi-job example with dependencies:
+
+```yaml
+jobs:
+  Build:
+    name: Build
+    steps:
+      - name: Compile
+        type: script
+        script-content: ./gradlew build
+  Test:
+    name: Test
+    depends-on:
+      - Build
+    steps:
+      - name: Run tests
+        type: script
+        script-content: ./gradlew test
+  Deploy:
+    name: Deploy
+    depends-on:
+      - Test
+    steps:
+      - name: Deploy
+        type: script
+        script-content: echo "Deploying..."
+```
 
 ---
 
-# Core Workflows
+# Create and Update
 
-## 1. List pipelines in a project
+## Create
 
 ```
 path: /app/pipeline
 query: parentProjectExtId=MyProject
 ```
 
-## 2. Read one pipeline
-
-```
-path: /app/pipeline/MyPipeline
-```
-
-## 3. Read parameter names and setup context
-
-Useful GET endpoints:
-
-```
-path: /app/pipeline/MyPipeline/parameters
-```
-
-```
-path: /app/pipeline/provider/vcs
-query: parentProjectExtId=MyProject
-```
-
-```
-path: /app/pipeline/provider/vcs/types
-query: parentProjectExtId=MyProject
-```
-
-```
-path: /app/pipeline/provider/vcs/MyConnection/repositories
-query: parentProjectExtId=MyProject&q=my-repo&pageSize=20
-```
-
-```
-path: /app/pipeline/provider/vcs/MyConnection/capabilities
-query: parentProjectExtId=MyProject
-```
-
-```
-path: /app/pipeline/provider/jdk
-```
-
-Use these before creating or updating YAML so you know what repository, provider, parameter, and JDK choices are actually available.
-
-## 4. Pipeline editor helpers
-
-These are real TeamCity pipeline operations even though they are not classic CRUD:
-- `POST /app/pipeline/schema/generate`
-- `POST /app/pipeline/repository/branches`
-- `POST /app/pipeline/repository/testConnection`
-- `POST /app/pipeline/repository/checkVersionedSettings`
-- `POST /app/pipeline/{id}/parameters/resolve`
-- `POST /app/pipeline/{id}/job-descriptions`
-- `POST /app/pipeline/{id}/buildStepDescription`
-- `POST /app/pipeline/{id}/compatibility/agents`
-- `POST /app/pipeline/{id}/compatibility/agents/{jobId}`
-- `POST /app/pipeline/{id}/notifications`
-- `POST /app/pipeline/{id}/kotlinDsl`
-
-Because they are POST endpoints, they require:
-1. pipeline support enabled
-2. brave mode enabled
-3. `teamcity_pipeline_post`
-4. a matching configured path only when `teamcity.ai.mcp.pipeline.post.allowed.paths` is set
-
-Important body-shape rule:
-- create, update, and most helper endpoints expect the full draft pipeline object, not a tiny patch
-- typical payloads include fields such as `name`, `yaml`, `vcsRoot`, `additionalVcsRoots`, `triggers`, `integrations`, `notifications`, and optional `versionedSettings`
-- `parameters/resolve` is special: it wraps the draft pipeline as `{ "pipeline": <draft>, "scope": {...} }`
-
-## 5. Pipeline create and update
-
-Main write endpoints:
-- `POST /app/pipeline`
-- `POST /app/pipeline/{id}`
-
-If a user asks for one of these, check the exposed POST path set first and avoid promising unsupported writes.
-
-For new pipelines, the query usually includes the target project:
-
-```
-path: /app/pipeline
-query: parentProjectExtId=MyProject
-```
-
-Minimal create/update payload shape:
+A **full pipeline draft** — used for create, update, and most POST helper endpoints:
 
 ```json
 {
   "name": "My Pipeline",
-  "yaml": "jobs:\\n  Job1:\\n    name: Build\\n    steps: []\\n",
+  "yaml": "jobs:\\n  Job1:\\n    name: Build\\n    steps:\\n      - name: Run\\n        type: script\\n        script-content: echo hello\\n",
   "vcsRoot": {
     "url": "https://example.com/org/repo.git",
     "branch": "refs/heads/main",
@@ -433,89 +297,145 @@ Minimal create/update payload shape:
 }
 ```
 
-## 6. Runtime-oriented GET helpers
+The response returns the created pipeline object including its assigned `id` (auto-generated from the name in PascalCase, e.g. "My Pipeline" → `MyPipeline`) — use this `id` for all subsequent calls.
 
-Useful GET endpoints under `/app/pipeline` include:
+**YAML escaping:** The `yaml` value is a JSON string. Build the YAML content first, then JSON-encode it (newlines become `\n`, quotes become `\"` — standard JSON string escaping). Preserve YAML indentation.
 
-```
-path: /app/pipeline/MyPipeline/optimizations
-query: branch=refs/heads/main
+**Note:** TeamCity uses POST (not PUT) for pipeline updates.
+
+## Update
+
+**Always read the pipeline first** with `GET /app/pipeline/{id}`. The GET response vcsRoot looks like:
+
+```json
+"vcsRoot": {
+  "id": "MyProject_HttpsGithubComOrgRepoGitRefsHeadsMain",
+  "isExternal": true,
+  "url": "https://github.com/org/repo.git",
+  "branch": "refs/heads/main",
+  "vcsName": "jetbrains.git",
+  ...
+}
 ```
 
-```
-path: /app/pipeline/MyPipeline/123456/optimizations
+If `isExternal` is `true`, you MUST include `externalVcsRootId` in the update payload, set to `vcsRoot.id` from the GET response. Without it, the server interprets the vcsRoot as a new internal root and rejects the update with a 500 error.
+
+**Important:** GET returns `id`, but POST expects `externalVcsRootId` — different field names, same value.
+
+Update with **external** VCS root (most common when no VCS connection is configured):
+
+```json
+{
+  "name": "My Pipeline",
+  "yaml": "...",
+  "vcsRoot": {
+    "externalVcsRootId": "<vcsRoot.id from GET response>",
+    "url": "https://example.com/org/repo.git",
+    "branch": "refs/heads/main",
+    "vcsName": "jetbrains.git"
+  },
+  "additionalVcsRoots": [],
+  "triggers": [],
+  "integrations": [],
+  "notifications": []
+}
 ```
 
-```
-path: /app/pipeline/MyPipeline/123456/vcsRoots
+Update with **internal** VCS root (has a VCS connection):
+
+```json
+{
+  "name": "My Pipeline",
+  "yaml": "...",
+  "vcsRoot": {
+    "url": "https://example.com/org/repo.git",
+    "branch": "refs/heads/main",
+    "vcsName": "jetbrains.git",
+    "connectionId": "MyConnection"
+  },
+  "additionalVcsRoots": [],
+  "triggers": [],
+  "integrations": [],
+  "notifications": []
+}
 ```
 
-```
-path: /app/pipeline/MyPipeline/notifications
-```
+If an update returns 500, the most common cause is a missing `externalVcsRootId` for external VCS roots.
 
 ---
 
-# Running Pipelines
+# Diagnosing Failed Pipeline Runs
 
-## Debug or remote-style pipeline run with custom YAML
-
-Use `/app/rest/pipelines/{pipelineId}/run` for debug-style runs.
-It sends:
-- `debug`
-- `yaml`
-- optionally `branch`
-
-Important caveats:
-- this still depends on the regular REST POST allowlist, not pipeline brave mode alone
-- if the MCP REST tool rejects the POST before it reaches TeamCity, report that as a tooling limitation
-
-## Poll the pipeline run
-
-```
-path: /app/rest/pipelines/MyPipeline/run/123456
-query: fields=number,build(id,state,status,statusText,branchName,finishOnAgentDate),jobs(job(id,name,build(id,state,status,statusText)))
-```
-
-When diagnosing failures:
-- read the pipeline run first
-- find the failed job entry and its underlying `build.id`
-- then switch to `teamcity://guides/build-failure-analysis` for the ordinary build/problem/test/log workflow
+1. The build `id` returned from `POST /app/rest/buildQueue` when you triggered the pipeline is also the pipeline run id.
+2. Get the pipeline run: `GET /app/rest/pipelines/{pipelineId}/run/{runId}` via `teamcity_rest_get` with fields including `jobs(job(id,name,build(id,state,status,statusText)))`
+3. Find the failed job and its `build.id`
+4. Use `teamcity://guides/build-failure-analysis` for build-level investigation (build log, test failures, problem occurrences)
 
 ---
 
-# What Is Reachable vs Still Conditional
+# Endpoint Reference
 
-## Reachable in brave mode
+## GET — via `teamcity_pipeline_get`
 
-- list pipelines: `GET /app/pipeline?parentProjectExtId=...` via `teamcity_pipeline_get`
-- get pipeline details and YAML: `GET /app/pipeline/{id}` via `teamcity_pipeline_get`
-- get available pipeline parameters: `GET /app/pipeline/{id}/parameters`
-- discover VCS providers, repositories, capabilities, and JDKs through `/app/pipeline/provider/...`
-- get pipeline optimizations, run optimizations, run VCS roots, and personal notifications through `/app/pipeline/...`
-- use exposed `/app/pipeline` POST helpers and writes via `teamcity_pipeline_post`
-- list branches: `GET /app/rest/pipelines/{id}/branches`
-- get pipeline run: `GET /app/rest/pipelines/{id}/run/{runId}`
-- inspect nested job builds through run details
-- inspect build/test/problem/log data for pipeline jobs
+| Endpoint | Purpose |
+|----------|---------|
+| `/app/pipeline?parentProjectExtId=...` | List pipelines in project |
+| `/app/pipeline/{id}` | Read pipeline with YAML |
+| `/app/pipeline/{id}/parameters` | Available parameter names (may return 400 on some versions) |
+| `/app/pipeline/{id}/optimizations?branch=...` | Build optimizations |
+| `/app/pipeline/{id}/{runId}/optimizations` | Run optimizations |
+| `/app/pipeline/{id}/{runId}/vcsRoots` | Run VCS roots |
+| `/app/pipeline/{id}/notifications` | Notification settings |
+| `/app/pipeline/provider/vcs?parentProjectExtId=...` | VCS connections |
+| `/app/pipeline/provider/vcs/types?parentProjectExtId=...` | VCS provider types |
+| `/app/pipeline/provider/vcs/{connId}/repositories?parentProjectExtId=...&q=...` | Search repos |
+| `/app/pipeline/provider/vcs/{connId}/capabilities?parentProjectExtId=...` | Connection capabilities |
+| `/app/pipeline/provider/jdk` | Available JDKs |
 
-## Still conditional or unsupported
+## POST — via `teamcity_pipeline_post`
 
-- if `teamcity.ai.mcp.pipeline.post.allowed.paths` is configured, pipeline POST operations outside that set are blocked
-- pipeline debug runs are blocked unless the regular REST POST allowlist allows `/app/rest/pipelines/.../run`
-- `DELETE /app/pipeline/{id}` remains unsupported because MCP has no pipeline DELETE tool
-- multipart upload flows such as pipeline SSH key upload remain unsupported through current MCP tooling
+All POST helper endpoints (compatibility, schema, job-descriptions, etc.) require the full pipeline draft as the request body — they do not read the stored pipeline definition. Sending an empty body `{}` returns 500.
+
+| Endpoint | Purpose | Body |
+|----------|---------|------|
+| `/app/pipeline?parentProjectExtId=...` | Create pipeline | Full pipeline draft |
+| `/app/pipeline/{id}` | Update pipeline | Full pipeline draft |
+| `/app/pipeline/{id}/compatibility/agents` | Check agent compatibility | Full pipeline draft |
+| `/app/pipeline/{id}/compatibility/agents/{jobId}` | Check per-job compatibility | Full pipeline draft |
+| `/app/pipeline/{id}/job-descriptions` | Job descriptions | Full pipeline draft |
+| `/app/pipeline/{id}/kotlinDsl` | Generate Kotlin DSL | Full pipeline draft |
+| `/app/pipeline/schema/generate?pipelineId=...` | YAML schema | Full pipeline draft |
+| `/app/pipeline/repository/branches` | Discover branches (requires VCS connectivity) | Full pipeline draft |
+| `/app/pipeline/repository/testConnection` | Test VCS connection (requires VCS connectivity) | Full pipeline draft |
+| `/app/pipeline/repository/checkVersionedSettings` | Check versioned settings (requires VCS connectivity) | Full pipeline draft |
+
+The `repository/*` endpoints require working VCS connectivity — they return 500 for pipelines with external VCS roots that have no stored credentials.
+
+## DELETE — via `teamcity_pipeline_delete`
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/app/pipeline/{id}` | Delete pipeline and its backing project (permanent) |
+
+## REST — via `teamcity_rest_get` / `teamcity_rest_post`
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /app/rest/pipelines/{id}/branches` | List branches |
+| `GET /app/rest/pipelines/{id}/run/{runId}` | Pipeline run details |
+| `POST /app/rest/pipelines/{id}/run` | Trigger debug run (requires REST POST allowlist) |
+| `POST /app/rest/buildQueue` | Standard pipeline trigger: `{"buildType": {"id": "<pipeline-id>"}}` |
+
+Poll a run with: `fields=number,build(id,state,status,statusText,branchName,finishOnAgentDate),jobs(job(id,name,build(id,state,status,statusText)))`
+
+**Note:** Job status lives inside `job.build`, not on the job object itself. Using `jobs(job(id,status))` will return empty fields — always nest through `job.build`.
 
 ---
 
-# Agent Rules of Thumb
+# Limitations
 
-- Prefer `teamcity_pipeline_get` for product-style pipeline discovery, setup discovery, and editor flows.
-- If `teamcity.ai.mcp.pipeline.post.allowed.paths` is configured, use `teamcity_pipeline_post` only for matching paths.
-- If the task is "set up a pipeline", start by discovering the project context: existing pipelines, providers, repositories, and available parameters.
-- Before calling a POST helper, decide whether it needs a full draft-pipeline body or a smaller helper payload.
-- Prefer `teamcity_rest_get` for pipeline run summaries, branch lists, and job-level runtime inspection.
-- For a failed pipeline run, pivot quickly from the pipeline run to the failing job build id.
-- Check pipeline support and brave mode before promising validation or updates, and also check the pipeline POST path set when it is configured.
+- Debug runs via `POST /app/rest/pipelines/{id}/run` — requires REST POST allowlist entry (by default only `/app/rest/buildQueue` is allowed)
+- SSH key upload — multipart, not supported through MCP
+- If `teamcity.ai.mcp.pipeline.post.allowed.paths` is configured, unlisted POST paths are blocked
     """.trimIndent()
 }

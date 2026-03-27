@@ -81,6 +81,29 @@ abstract class McpIntegrationTestBase {
         }
     }
 
+    protected fun createPipeline(name: String, yaml: String = "jobs:\n  Job1:\n    name: Seed Job\n    steps: []\n"): String {
+        val payload = buildJsonObject {
+            put("name", name)
+            put("yaml", yaml)
+            put("additionalVcsRoots", buildJsonArray { })
+            put("triggers", buildJsonArray { })
+            put("integrations", buildJsonArray { })
+            put("notifications", buildJsonArray { })
+        }
+
+        val response = sendTeamCityRequest("/app/pipeline", "POST", payload.toString())
+        check(response.statusCode() in 200..299) {
+            "Failed to create pipeline '$name': HTTP ${response.statusCode()} body=${response.body()}"
+        }
+
+        return json.parseToJsonElement(response.body()).jsonObject["id"]?.jsonPrimitive?.content
+            ?: error("Pipeline creation response missing 'id'")
+    }
+
+    protected fun pipelineExists(pipelineId: String): Boolean {
+        return listPipelines().any { it["id"]?.jsonPrimitive?.content == pipelineId }
+    }
+
     private fun prop(name: String): String? = System.getProperty(name) ?: System.getenv(name)
 
     private fun sendTeamCityRequest(
@@ -101,6 +124,7 @@ abstract class McpIntegrationTestBase {
         when (method) {
             "GET" -> requestBuilder.GET()
             "POST" -> requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body ?: ""))
+            "DELETE" -> requestBuilder.DELETE()
             else -> error("Unsupported method: $method")
         }
 

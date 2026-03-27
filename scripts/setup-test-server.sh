@@ -36,7 +36,7 @@ TC_DIST="${TC_DIST_RESOLVED[0]}"
 
 TC_HOME="${TC_HOME:-teamcity-home}"
 TC_PORT="${TC_PORT:-8111}"
-TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,teamcity_pipeline_get,teamcity_pipeline_post,introduce_yourself}"
+TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,teamcity_pipeline_get,teamcity_pipeline_post,teamcity_pipeline_delete,introduce_yourself}"
 TC_MCP_RESOURCES="${TC_MCP_RESOURCES:-rest_api_guide,build_failure_analysis_guide,pipeline_guide,introduce_yourself}"
 TC_BASE_URL="http://localhost:${TC_PORT}"
 

@@ -40,8 +40,7 @@ class PipelineGuideResourceTest {
         assertTrue(content.contains("Brave Mode"))
         assertTrue(content.contains("teamcity_pipeline_get"))
         assertTrue(content.contains("teamcity_pipeline_post"))
-        assertTrue(content.contains("teamcity.ai.mcp.pipeline.enabled"))
-        assertTrue(content.contains("teamcity.ai.mcp.braveMode.enabled"))
+        assertTrue(content.contains("teamcity_pipeline_delete"))
         assertTrue(content.contains("teamcity.ai.mcp.pipeline.post.allowed.paths"))
         assertTrue(content.contains("/app/pipeline/schema/generate"))
     }

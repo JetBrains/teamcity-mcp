@@ -34,6 +34,11 @@ class PipelineGetToolTest {
             query: String,
             body: String
         ): jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse = throw UnsupportedOperationException()
+
+        override suspend fun delete(
+            path: String,
+            query: String
+        ): jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse = throw UnsupportedOperationException()
     }
 
     @Test

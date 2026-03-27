@@ -45,6 +45,9 @@ class PipelinePostToolTest {
             capturedBody = body
             return response
         }
+
+        override suspend fun delete(path: String, query: String): RestApiResponse =
+            throw UnsupportedOperationException()
     }
 
     @Test

@@ -34,6 +34,12 @@ class PipelineApiClientImpl(
         }
     }
 
+    override suspend fun delete(path: String, query: String): RestApiResponse {
+        return withContext(Dispatchers.IO) {
+            executeRequest(HttpMethod.DELETE, path, query)
+        }
+    }
+
     private suspend fun executeRequest(
         method: HttpMethod,
         path: String,

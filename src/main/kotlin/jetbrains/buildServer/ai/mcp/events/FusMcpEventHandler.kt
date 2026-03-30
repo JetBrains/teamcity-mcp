@@ -1,8 +1,6 @@
 package jetbrains.buildServer.ai.mcp.events
 
 import com.intellij.openapi.diagnostic.Logger
-import jetbrains.buildServer.ai.mcp.events.FusUtils.MCP_FUS_ENABLED
-import jetbrains.buildServer.ai.mcp.events.FusUtils.areFusEventClassesPresent
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.serverSide.auth.SecurityContext
 import jetbrains.buildServer.serverSide.impl.fus.FusRegistry
@@ -39,7 +37,18 @@ open class FusMcpEventHandler(
         }
     }
 
-
+    protected open fun areFusEventClassesPresent(): Boolean {
+        return try {
+            Class.forName("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.SessionStartedEvent", false, FusMcpEventHandler::class.java.classLoader)
+            true
+        } catch (_: ClassNotFoundException) {
+            LOGGER.debug("FUS events classes for MCP are not present, completely skipping MCP FUS event logging")
+            false
+        } catch (e: Throwable) {
+            LOGGER.debug("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
+            false
+        }
+    }
 
     private fun logInitializeRequested(event: McpEvent.InitializeRequested) {
         val (clientName, clientVersion) = parseClientInfo(event.clientInfo)

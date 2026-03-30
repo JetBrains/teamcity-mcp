@@ -53,8 +53,8 @@ dependencies {
     "integrationTestImplementation"(libs.ktor.client.cio)
 }
 
-val spaceUsername = anyParam("spaceUsername")
-val spacePassword = anyParam("spacePassword")
+val spaceUsername = "Daniil.Boger"
+val spacePassword = "eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiIyRFFZRnkwSlhYY2oiLCJhdWQiOiJjaXJjbGV0LXdlYi11aSIsIm9yZ0RvbWFpbiI6ImpldGJyYWlucyIsIm5hbWUiOiJEYW5paWwuQm9nZXIiLCJpc3MiOiJodHRwczpcL1wvamV0YnJhaW5zLnRlYW0iLCJwZXJtX3Rva2VuIjoiNFBZMDF4M3FQNk53IiwicHJpbmNpcGFsX3R5cGUiOiJVU0VSIiwiaWF0IjoxNzA1MzIwNjI3fQ.KXLu-hMa5ineoNse5G8LmXQ8bWFfC2s26BfZG9sF2LhbVQ2jfHyzsx0LG5l8ehMrEE7zD-UZnwPfdozhF6TqR6f9xb1lL7rgAFigN5BHVarQ3walq7mXZ2-OGeUexzB5fu-c-T87GlmU70BO00lCGduOS1xtv0u2iassU3AGqqU"
 
 allprojects {
     repositories {

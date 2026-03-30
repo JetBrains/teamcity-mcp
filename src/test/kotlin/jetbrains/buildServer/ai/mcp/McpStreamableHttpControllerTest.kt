@@ -206,6 +206,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
@@ -219,10 +220,27 @@ class McpStreamableHttpControllerTest {
             protocolVersion = null,
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED, result.statusCode)
+    }
+
+    @Test
+    fun `GET from browser redirects to the documentation`() {
+        val request = mockk<HttpServletRequest>(relaxed = true)
+        val result = controller.handleGet(
+            protocolVersion = null,
+            sessionId = null,
+            userAgent = null,
+            accept = "text/html",
+            servletRequest = request
+        )
+
+        assertEquals(HttpStatus.FOUND, result.statusCode)
+        val redirectUrl = result.headers.location?.toString()
+        assertEquals(DOCUMENTATION_URL, redirectUrl)
     }
 
     @Test
@@ -346,6 +364,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = "1999-01-01",
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
@@ -575,6 +594,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
             sessionId = "s1",
             userAgent = "TestAgent",
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 

@@ -206,6 +206,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
@@ -219,10 +220,27 @@ class McpStreamableHttpControllerTest {
             protocolVersion = null,
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED, result.statusCode)
+    }
+
+    @Test
+    fun `GET from browser redirects to the documentation`() {
+        val request = mockk<HttpServletRequest>(relaxed = true)
+        val result = controller.handleGet(
+            protocolVersion = null,
+            sessionId = null,
+            userAgent = null,
+            accept = "text/html",
+            servletRequest = request
+        )
+
+        assertEquals(HttpStatus.FOUND, result.statusCode)
+        val redirectUrl = result.headers.location?.toString()
+        assertEquals(DOCUMENTATION_URL, redirectUrl)
     }
 
     @Test
@@ -346,6 +364,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = "1999-01-01",
             sessionId = null,
             userAgent = null,
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
@@ -575,6 +594,7 @@ class McpStreamableHttpControllerTest {
             protocolVersion = McpProtocolVersion.VERSION_2025_11_25,
             sessionId = "s1",
             userAgent = "TestAgent",
+            accept = "application/json, text/event-stream",
             servletRequest = request
         )
 
@@ -680,7 +700,7 @@ class McpStreamableHttpControllerTest {
         verify(timeout = 2_000) {
             eventBus.emit(match {
                 it is McpEvent.SessionClosed &&
-                    (it.reason == "Initialize request failed" || it.reason == "Initialize request cancelled")
+                        (it.reason == "Initialize request failed" || it.reason == "Initialize request cancelled")
             })
         }
     }
@@ -707,8 +727,8 @@ class McpStreamableHttpControllerTest {
         verify(timeout = 2_000) {
             eventBus.emit(match {
                 it is McpEvent.SessionClosed &&
-                it.sessionId == "s1" &&
-                it.reason == "client request"
+                        it.sessionId == "s1" &&
+                        it.reason == "client request"
             })
         }
     }
@@ -728,8 +748,8 @@ class McpStreamableHttpControllerTest {
         verify(exactly = 2) {
             eventBus.emit(match {
                 it is McpEvent.SessionClosed &&
-                    it.reason == "controller destroy" &&
-                    (it.sessionId == "s1" || it.sessionId == "s2")
+                        it.reason == "controller destroy" &&
+                        (it.sessionId == "s1" || it.sessionId == "s2")
             })
         }
     }
@@ -767,8 +787,8 @@ class McpStreamableHttpControllerTest {
         verify(timeout = 2_000) {
             eventBus.emit(match {
                 it is McpEvent.SessionClosed &&
-                    it.sessionId == "recovered" &&
-                    it.reason == "replaced by new session"
+                        it.sessionId == "recovered" &&
+                        it.reason == "replaced by new session"
             })
         }
     }
@@ -812,8 +832,8 @@ class McpStreamableHttpControllerTest {
         verify {
             eventBus.emit(match {
                 it is McpEvent.SessionClosed &&
-                    it.sessionId == "s1" &&
-                    it.reason == "controller destroy"
+                        it.sessionId == "s1" &&
+                        it.reason == "controller destroy"
             })
         }
     }
@@ -835,8 +855,8 @@ class McpStreamableHttpControllerTest {
         verify {
             eventBus.emit(match {
                 it is McpEvent.InitializeRequested &&
-                it.protocolVersion == "2025-11-25" &&
-                it.clientInfo != null && it.clientInfo!!.contains("test-client")
+                        it.protocolVersion == "2025-11-25" &&
+                        it.clientInfo != null && it.clientInfo!!.contains("test-client")
             })
         }
     }
@@ -856,8 +876,8 @@ class McpStreamableHttpControllerTest {
         verify {
             eventBus.emit(match {
                 it is McpEvent.InitializeRequested &&
-                it.protocolVersion == "1999-01-01" &&
-                it.clientInfo != null && it.clientInfo!!.contains("bad-client")
+                        it.protocolVersion == "1999-01-01" &&
+                        it.clientInfo != null && it.clientInfo!!.contains("bad-client")
             })
         }
     }
@@ -877,7 +897,7 @@ class McpStreamableHttpControllerTest {
         verify {
             eventBus.emit(match {
                 it is McpEvent.InitializeRequested &&
-                it.protocolVersion == "2025-11-25"
+                        it.protocolVersion == "2025-11-25"
             })
         }
     }

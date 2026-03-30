@@ -1,10 +1,10 @@
 package jetbrains.buildServer.ai.mcp.events
 
+import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.TeamCityCloud
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.events.FusUtils.MCP_FUS_ENABLED
 import jetbrains.buildServer.ai.mcp.events.FusUtils.areFusEventClassesPresent
-import jetbrains.buildServer.log.Loggers
 import jetbrains.buildServer.serverSide.BuildServerAdapter
 import jetbrains.buildServer.serverSide.BuildServerListenerEventDispatcher
 import jetbrains.buildServer.serverSide.CurrentNodeInfo
@@ -22,6 +22,10 @@ class FusStateCollectorScheduledTask(
     private val settingsService: SettingsService,
     private val fusRegistry: FusRegistry
 ): Runnable {
+
+    companion object {
+        private val LOGGER = Logger.getInstance(FusStateCollectorScheduledTask::class.java.name)
+    }
 
     init {
         buildServerListenerEventDispatcher.addListener(object : BuildServerAdapter() {
@@ -46,7 +50,7 @@ class FusStateCollectorScheduledTask(
                 )
             )
         } catch (e: Throwable) {
-            Loggers.SERVER.warnAndDebugDetails("Cannot collect state in McpServerStateGroup", e)
+            LOGGER.warnAndDebugDetails("Cannot collect state in McpServerStateGroup", e)
         }
 
         logWithProperLevel("Finished FUS states collection for MCP server feature")
@@ -54,9 +58,9 @@ class FusStateCollectorScheduledTask(
 
     private fun logWithProperLevel(message: String) {
         if (TeamCityCloud.isCloud()) {
-            Loggers.SERVER.info(message)
+            LOGGER.info(message)
         } else {
-            Loggers.SERVER.debug(message)
+            LOGGER.debug(message)
         }
     }
 }

@@ -1,6 +1,7 @@
 package jetbrains.buildServer.ai.mcp.events
 
 import com.intellij.openapi.diagnostic.Logger
+import jetbrains.buildServer.ai.mcp.events.McpFusUtils.MCP_FUS_ENABLED
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.serverSide.auth.SecurityContext
 import jetbrains.buildServer.serverSide.impl.fus.FusRegistry
@@ -9,8 +10,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.*
 import org.springframework.stereotype.Component
-
-private const val MCP_FUS_ENABLED = "teamcity.ai.mcp.fus.enabled"
 
 @Component
 open class FusMcpEventHandler(
@@ -40,16 +39,8 @@ open class FusMcpEventHandler(
     }
 
     protected open fun areFusEventClassesPresent(): Boolean {
-        return try {
-            Class.forName("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.SessionStartedEvent", false, FusMcpEventHandler::class.java.classLoader)
-            true
-        } catch (_: ClassNotFoundException) {
-            LOGGER.debug("FUS events classes for MCP are not present, completely skipping MCP FUS event logging")
-            false
-        } catch (e: Throwable) {
-            LOGGER.debug("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
-            false
-        }
+        return McpFusUtils
+            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.SessionStartedEvent")
     }
 
     private fun logInitializeRequested(event: McpEvent.InitializeRequested) {

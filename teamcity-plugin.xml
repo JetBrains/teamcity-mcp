@@ -5,7 +5,7 @@
         <name>mcp</name>
         <display-name>MCP Server</display-name>
         <version>@Plugin_Version@</version>
-        <description>HTTP MCP Server for TeamCity Server</description>
+        <description>Allows TeamCity to serve as an MPC server for AI agents</description>
         <vendor>
             <name>JetBrains</name>
             <url>https://www.jetbrains.com</url>

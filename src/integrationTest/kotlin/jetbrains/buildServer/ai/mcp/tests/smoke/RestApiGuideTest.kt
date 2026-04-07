@@ -744,6 +744,28 @@ class RestApiGuideTest : McpIntegrationTestBase() {
     }
 
     // ==================================================================
+    // REST API documentation link
+    // ==================================================================
+
+    @Nested
+    inner class ApiDocumentation {
+
+        @Test
+        fun `swagger json endpoint is accessible`() {
+            mcpClient().withSession {
+                val result = callTool("teamcity_rest_get", mapOf(
+                    "path" to "/app/rest/swagger.json"
+                ))
+                assertFalse(result.isError, "swagger.json should be accessible: ${result.content}")
+                val meta = extractMeta(result)
+                assertEquals(200, meta["statusCode"]?.jsonPrimitive?.intOrNull,
+                    "swagger.json should return 200")
+                println("  ✓ /app/rest/swagger.json is accessible")
+            }
+        }
+    }
+
+    // ==================================================================
     // Helpers
     // ==================================================================
 

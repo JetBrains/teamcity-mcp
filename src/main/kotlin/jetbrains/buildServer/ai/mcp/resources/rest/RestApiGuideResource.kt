@@ -2,6 +2,8 @@ package jetbrains.buildServer.ai.mcp.resources.rest
 
 import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
 import jetbrains.buildServer.ai.mcp.resources.McpResource
+import jetbrains.buildServer.version.ServerVersionHolder
+import jetbrains.buildServer.version.ServerVersionInfo
 import org.springframework.stereotype.Component
 
 @Component
@@ -10,10 +12,26 @@ class RestApiGuideResource : McpResource {
     companion object {
         const val SETTINGS_NAME = "rest_api_guide"
 
+        /**
+         * displayVersion = 2025.11.2; return = 2025.11
+         * displayVersion = 2026.1 EAP; return = 2026.1
+         */
+        private fun ServerVersionInfo.getYearPlusMajorDisplayVersion(): String {
+            return "${displayVersionMajor}.${displayVersionMinor}"
+        }
+
+        internal fun restApiDocsUrl(): String {
+            val version = ServerVersionHolder.getVersion().getYearPlusMajorDisplayVersion()
+            return "https://www.jetbrains.com/help/teamcity/rest/$version/teamcity-rest-api-documentation.html"
+        }
+
         private val CONTENT = """
 # TeamCity REST API Guide
 
 This guide teaches you how to use the `teamcity_rest_get`, `teamcity_rest_post`, and `teamcity_build_log` tools to query and interact with TeamCity.
+
+Official REST API reference: {{REST_API_DOCS_URL}}
+Server-local OpenAPI spec: `path=/app/rest/swagger.json` — very large response, use only when you need exact field names or endpoint signatures not covered by this guide.
 
 ---
 
@@ -681,5 +699,5 @@ For a full build failure investigation methodology, see the **Build Failure Anal
 
     override val mimeType = "text/markdown"
 
-    override fun read(): String = CONTENT
+    override fun read(): String = CONTENT.replace("{{REST_API_DOCS_URL}}", restApiDocsUrl())
 }

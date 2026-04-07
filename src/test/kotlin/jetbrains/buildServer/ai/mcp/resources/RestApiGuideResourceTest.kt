@@ -42,6 +42,14 @@ class RestApiGuideResourceTest {
     }
 
     @Test
+    fun `content links to REST API documentation`() {
+        val content = resource.read()
+        assertTrue(content.contains("/app/rest/swagger.json"), "Should link to Swagger API spec")
+        assertTrue(content.contains("jetbrains.com/help/teamcity/rest"),
+            "Should link to official JetBrains REST API documentation")
+    }
+
+    @Test
     fun `content covers POST topics`() {
         val content = resource.read()
         assertTrue(content.contains("teamcity_rest_post"), "Should mention the POST tool name")

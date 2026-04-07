@@ -7,6 +7,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import jetbrains.buildServer.ai.mcp.MCP_FEATURE_TOGGLE
 import jetbrains.buildServer.ai.mcp.SettingsService
+import jetbrains.buildServer.ai.mcp.events.McpFusUtils.MCP_FUS_ENABLED
 import jetbrains.buildServer.serverSide.impl.fus.FusRegistry
 import org.jetbrains.teamcity.fus.domain.model.states.ai.McpServerStateGroup
 import org.junit.jupiter.api.AfterEach

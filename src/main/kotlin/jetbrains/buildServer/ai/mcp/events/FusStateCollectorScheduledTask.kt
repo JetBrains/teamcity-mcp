@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.events
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.TeamCityCloud
 import jetbrains.buildServer.ai.mcp.SettingsService
+import jetbrains.buildServer.ai.mcp.events.McpFusUtils.MCP_FUS_ENABLED
 import jetbrains.buildServer.serverSide.BuildServerAdapter
 import jetbrains.buildServer.serverSide.BuildServerListenerEventDispatcher
 import jetbrains.buildServer.serverSide.CurrentNodeInfo
@@ -55,16 +56,8 @@ open class FusStateCollectorScheduledTask(
     }
 
     protected open fun areFusEventClassesPresent(): Boolean {
-        return try {
-            Class.forName("org.jetbrains.teamcity.fus.domain.model.states.ai.McpServerStateGroup.McpServerState", false, FusStateCollectorScheduledTask::class.java.classLoader)
-            true
-        } catch (_: ClassNotFoundException) {
-            LOGGER.debug("FUS events classes for MCP are not present, completely skipping MCP FUS event logging")
-            false
-        } catch (e: Throwable) {
-            LOGGER.debug("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
-            false
-        }
+        return McpFusUtils
+            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.states.ai.McpServerStateGroup.McpServerState")
     }
 
     private fun logWithProperLevel(message: String) {

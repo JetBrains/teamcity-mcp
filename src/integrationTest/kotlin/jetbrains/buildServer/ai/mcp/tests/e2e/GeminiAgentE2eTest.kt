@@ -84,7 +84,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP tools`() {
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "List all available MCP tools. For each tool print exactly one line:\n" +
                     "TOOL: <name> - <description>\n" +
@@ -92,6 +92,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("tool discovery")
+            .assumeExternalApiAvailable("tool discovery")
             .assertGeminiSuccess("tool discovery")
             // Gemini's delta streaming may split "introduce_yourself" across message boundaries,
             // so check for partial matches that survive the split.
@@ -103,7 +104,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent calls introduce_yourself tool and gets a response`() {
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Call the MCP tool named \"introduce_yourself\" exactly once with name \"Gemini\".\n" +
                     "Print the tool's text result on a line starting with:\n" +
@@ -111,6 +112,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("tool call")
+            .assumeExternalApiAvailable("tool call")
             .assertGeminiSuccess("tool call")
             .assertToolCalled("introduce_yourself")
             .assertOutputContains("RESULT:")
@@ -118,7 +120,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent can list tools and call one in a single turn`() {
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
                     "2. Then call \"introduce_yourself\" tool.\n" +
@@ -126,6 +128,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("combined prompt")
+            .assumeExternalApiAvailable("combined prompt")
             .assertGeminiSuccess("combined prompt")
             .assertOutputContains("TOOL:")
             .assertOutputContains("RESULT:")
@@ -134,7 +137,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent retrieves server info via REST tool`() {
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_rest_get tool to call /app/rest/server with query fields=version,buildNumber.\n" +
                     "Print the result on a line starting with:\n" +
@@ -142,6 +145,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("rest tool")
+            .assumeExternalApiAvailable("rest tool")
             .assertGeminiSuccess("rest tool")
             .assertToolCalled("teamcity_rest_get")
             .assertOutputContainsAny(
@@ -163,7 +167,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
             }
         }
 
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
                     "Then print one line starting with:\n" +
@@ -173,6 +177,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("pipeline tool")
+            .assumeExternalApiAvailable("pipeline tool")
             .assertGeminiSuccess("pipeline tool")
             .assertToolCalled("teamcity_pipeline_get")
             .assertOutputContains("PIPELINES:")
@@ -184,7 +189,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
         assumeTrue(supportsResources,
             "Gemini CLI does not expose MCP resource tools in non-interactive mode — skipping")
 
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources (read-only data) in addition to tools. " +
                     "List all MCP resources available to you. " +
@@ -192,6 +197,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("resource discovery")
+            .assumeExternalApiAvailable("resource discovery")
             .assertGeminiSuccess("resource discovery")
             .assertOutputContainsAny(
                 "teamcity://", "introduce-yourself", "introduce_yourself",
@@ -205,7 +211,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
         assumeTrue(supportsResources,
             "Gemini CLI does not expose MCP resource tools in non-interactive mode — skipping")
 
-        val output = scripts.run("gemini-agent.sh",
+        val output = scripts.runWithRetry("gemini-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources. " +
                     "Read the MCP resource with URI \"teamcity://info/introduce-yourself\" " +
@@ -213,6 +219,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("resource read")
+            .assumeExternalApiAvailable("resource read")
             .assertGeminiSuccess("resource read")
             .assertOutputContainsAny(
                 "TeamCity MCP server", "tools and resources", "AI agents",

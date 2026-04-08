@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.framework.e2e
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions
 
 /**
  * Structured output from an AI agent CLI invocation.
@@ -112,6 +113,16 @@ data class AgentOutput(
             ?: emptySet()
     }
 
+    /**
+     * True when the output indicates the external AI provider API returned a
+     * transient error (overload, rate-limit, internal server error).
+     * These are provider-side issues, not MCP plugin problems.
+     */
+    val isExternalApiError: Boolean by lazy {
+        val combined = stdout + "\n" + stderr
+        EXTERNAL_API_ERROR_PATTERNS.any { it.containsMatchIn(combined) }
+    }
+
     // -- diagnostics --
 
     /** Print all captured output to stdout for debugging. */
@@ -136,6 +147,21 @@ data class AgentOutput(
     }
 
     // -- assertions --
+
+    /**
+     * Skip the test when the output shows an external AI API error
+     * (e.g. Anthropic 529 Overloaded, Gemini 500 Internal, rate limits).
+     * Must be called before hard assertions like [assertExitCode].
+     */
+    fun assumeExternalApiAvailable(label: String = ""): AgentOutput {
+        Assumptions.assumeFalse(
+            isExternalApiError,
+            "${if (label.isNotEmpty()) "$label: " else ""}" +
+                "External AI API error — skipping (not an MCP plugin issue). " +
+                "stderr: ${stderr.take(500)}"
+        )
+        return this
+    }
 
     fun assertExitCode(expected: Int, label: String = "command"): AgentOutput {
         assertEquals(expected, exitCode,
@@ -198,4 +224,18 @@ data class AgentOutput(
 
     private fun JsonObject.strField(key: String): String? =
         try { this[key]?.jsonPrimitive?.content } catch (_: Exception) { null }
+
+    companion object {
+        /** Patterns that identify transient external AI provider API errors. */
+        internal val EXTERNAL_API_ERROR_PATTERNS = listOf(
+            Regex("overloaded_error"),
+            Regex("\"status\":\\s*529"),
+            Regex("got status: INTERNAL"),
+            Regex("rate.?limit", RegexOption.IGNORE_CASE),
+            Regex("\"code\":\\s*429"),
+            Regex("\"code\":\\s*500,\\s*\"message\":\\s*\"Internal error"),
+            Regex("\"code\":\\s*503"),
+            Regex("\"status\":\\s*\"INTERNAL\""),
+        )
+    }
 }

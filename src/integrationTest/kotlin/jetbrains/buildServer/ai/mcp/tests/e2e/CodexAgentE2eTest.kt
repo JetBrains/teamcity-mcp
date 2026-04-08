@@ -63,7 +63,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP tools`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "List all available MCP tools. For each tool print exactly one line:\n" +
                     "TOOL: <name> - <description>\n" +
@@ -71,13 +71,14 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("tool discovery")
+            .assumeExternalApiAvailable("tool discovery")
             .assertExitCode(0, "tool discovery")
             .assertOutputContains("introduce_yourself", "tool listing must include introduce_yourself")
     }
 
     @Test
     fun `agent calls introduce_yourself tool and gets a response`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Call the MCP tool named \"introduce_yourself\" exactly once with name \"Codex\".\n" +
                     "Print the tool's text result on a line starting with:\n" +
@@ -85,6 +86,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("tool call")
+            .assumeExternalApiAvailable("tool call")
             .assertExitCode(0, "tool call")
             .assertToolCalled("introduce_yourself")
             .assertOutputContains("RESULT:")
@@ -92,7 +94,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent can list tools and call one in a single turn`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
                     "2. Then call \"introduce_yourself\" tool.\n" +
@@ -100,6 +102,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("combined prompt")
+            .assumeExternalApiAvailable("combined prompt")
             .assertExitCode(0, "combined prompt")
             .assertOutputContains("TOOL:")
             .assertOutputContains("RESULT:")
@@ -108,7 +111,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent retrieves server info via REST tool`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_rest_get tool to call /app/rest/server with query fields=version,buildNumber.\n" +
                     "Print the result on a line starting with:\n" +
@@ -116,6 +119,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("rest tool")
+            .assumeExternalApiAvailable("rest tool")
             .assertExitCode(0, "rest tool")
             .assertToolCalled("teamcity_rest_get")
             .assertOutputContainsAny(
@@ -137,7 +141,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
             }
         }
 
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
                     "Then print one line starting with:\n" +
@@ -147,6 +151,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("pipeline tool")
+            .assumeExternalApiAvailable("pipeline tool")
             .assertExitCode(0, "pipeline tool")
             .assertToolCalled("teamcity_pipeline_get")
             .assertOutputContains("PIPELINES:")
@@ -155,7 +160,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP resources`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources (read-only data) in addition to tools. " +
                     "List all MCP resources available to you. " +
@@ -163,6 +168,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("resource discovery")
+            .assumeExternalApiAvailable("resource discovery")
             .assertExitCode(0, "resource discovery")
             .assertOutputContainsAny(
                 "teamcity://", "introduce-yourself", "introduce_yourself",
@@ -173,7 +179,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent reads introduce_yourself resource`() {
-        val output = scripts.run("codex-agent.sh",
+        val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources. " +
                     "Read the MCP resource with URI \"teamcity://info/introduce-yourself\" " +
@@ -181,6 +187,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("resource read")
+            .assumeExternalApiAvailable("resource read")
             .assertExitCode(0, "resource read")
             .assertOutputContainsAny(
                 "TeamCity MCP server", "tools and resources", "AI agents",

@@ -62,7 +62,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP tools`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "List all available MCP tools. For each tool print exactly one line:\n" +
                     "TOOL: <name> - <description>\n" +
@@ -70,6 +70,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("tool discovery")
+            .assumeExternalApiAvailable("tool discovery")
             .assertNoErrors()
             .assertExitCode(0, "tool discovery")
             .assertOutputContains("introduce_yourself", "tool listing must include introduce_yourself")
@@ -77,7 +78,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent calls introduce_yourself tool and gets a response`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Call the MCP tool named \"introduce_yourself\" exactly once with name \"Claude\".\n" +
                     "Print the tool's text result on a line starting with:\n" +
@@ -85,6 +86,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("tool call")
+            .assumeExternalApiAvailable("tool call")
             .assertNoErrors()
             .assertExitCode(0, "tool call")
             .assertToolCalled("introduce_yourself")
@@ -93,7 +95,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent can list tools and call one in a single turn`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
                     "2. Then call \"introduce_yourself\" tool.\n" +
@@ -101,6 +103,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("combined prompt")
+            .assumeExternalApiAvailable("combined prompt")
             .assertNoErrors()
             .assertExitCode(0, "combined prompt")
             .assertOutputContains("TOOL:")
@@ -110,7 +113,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent retrieves server info via REST tool`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_rest_get tool to call /app/rest/server with query fields=version,buildNumber.\n" +
                     "Print the result on a line starting with:\n" +
@@ -118,6 +121,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("rest tool")
+            .assumeExternalApiAvailable("rest tool")
             .assertNoErrors()
             .assertExitCode(0, "rest tool")
             .assertToolCalled("teamcity_rest_get")
@@ -140,7 +144,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
             }
         }
 
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
                     "Then print one line starting with:\n" +
@@ -150,6 +154,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
                 findApiKey()!!))
 
         output.dump("pipeline tool")
+            .assumeExternalApiAvailable("pipeline tool")
             .assertNoErrors()
             .assertExitCode(0, "pipeline tool")
             .assertToolCalled("teamcity_pipeline_get")
@@ -159,7 +164,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent calls common REST endpoints including encoding-sensitive queries`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 """You must call the teamcity_rest_get tool for EACH of the following queries, one call per query. Do NOT skip any.
 After each call, print exactly one result line.
@@ -187,6 +192,7 @@ At the end, print DONE.""",
             timeoutSeconds = 300)
 
         output.dump("common REST endpoints")
+            .assumeExternalApiAvailable("common REST endpoints")
             .assertExitCode(0, "common REST endpoints")
             .assertToolCalled("teamcity_rest_get")
             .assertOutputContainsAny(
@@ -198,7 +204,7 @@ At the end, print DONE.""",
 
     @Test
     fun `agent discovers TeamCity MCP resources`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources (read-only data) in addition to tools. " +
                     "List all MCP resources available to you. " +
@@ -206,6 +212,7 @@ At the end, print DONE.""",
                 findApiKey()!!))
 
         output.dump("resource discovery")
+            .assumeExternalApiAvailable("resource discovery")
             .assertExitCode(0, "resource discovery")
             .assertOutputContainsAny(
                 "teamcity://", "introduce-yourself", "introduce_yourself",
@@ -216,7 +223,7 @@ At the end, print DONE.""",
 
     @Test
     fun `agent reads introduce_yourself resource`() {
-        val output = scripts.run("claude-agent.sh",
+        val output = scripts.runWithRetry("claude-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
                 "You have access to MCP resources. " +
                     "Read the MCP resource with URI \"teamcity://info/introduce-yourself\" " +
@@ -224,6 +231,7 @@ At the end, print DONE.""",
                 findApiKey()!!))
 
         output.dump("resource read")
+            .assumeExternalApiAvailable("resource read")
             .assertExitCode(0, "resource read")
             .assertOutputContainsAny(
                 "TeamCity MCP server", "tools and resources", "AI agents",

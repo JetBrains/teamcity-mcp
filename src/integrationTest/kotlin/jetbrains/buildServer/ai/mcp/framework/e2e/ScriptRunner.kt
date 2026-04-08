@@ -64,6 +64,32 @@ class ScriptRunner(private val scriptsDir: String) {
     }
 
     /**
+     * Run a script with automatic retry on external AI API errors.
+     *
+     * If the first attempt fails with a detected external API error (overload,
+     * rate-limit, 500), retries up to [maxRetries] times with a delay.
+     * Returns the last [AgentOutput] — callers should chain
+     * [AgentOutput.assumeExternalApiAvailable] to skip the test if all retries failed.
+     */
+    fun runWithRetry(
+        script: String,
+        args: List<String> = emptyList(),
+        stdin: String? = null,
+        timeoutSeconds: Long = 300,
+        maxRetries: Int = 1,
+        retryDelaySec: Long = 15
+    ): AgentOutput {
+        repeat(maxRetries + 1) { attempt ->
+            val output = run(script, args, stdin, timeoutSeconds)
+            if (!output.isExternalApiError || attempt == maxRetries) return output
+            println("  External API error on attempt ${attempt + 1}/${maxRetries + 1}, " +
+                "retrying in ${retryDelaySec}s...")
+            Thread.sleep(retryDelaySec * 1000)
+        }
+        error("unreachable")
+    }
+
+    /**
      * Run a script and throw on non-zero exit. Returns stdout.
      *
      * @param script         script filename (e.g. "common.sh")

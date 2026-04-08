@@ -7,7 +7,6 @@ import jetbrains.buildServer.ai.mcp.tools.rest.impl.McpToolExecutionContext
 import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import jetbrains.buildServer.users.SUser
-import jetbrains.buildServer.util.HelpURLProvider
 import jetbrains.buildServer.util.NamedDaemonThreadFactory
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerializationException
@@ -36,7 +35,6 @@ private const val CONTENT_TYPE_HEADER = "Content-Type"
 private const val ACCEPT_HEADER = "Accept"
 
 private const val APPLICATION_JSON = "application/json"
-val DOCUMENTATION_URL: String = HelpURLProvider.getHelpUrl("mcp")  // TODO: Replace mcp with actual page id
 
 /**
  * MCP Streamable HTTP controller implementing protocol version 2025-11-25 (JSON-only mode).
@@ -295,14 +293,14 @@ class McpStreamableHttpController(
     }
 
     /**
-     * GET endpoint: redirects browsers to the documentation page;
-     * returns 405 Method Not Allowed for programmatic MCP clients.
+     * GET endpoint: returns 405 Method Not Allowed.
+     * JSON-only mode does not support SSE streams.
      *
-     * Browser requests are detected by the presence of "text/html" in the Accept header.
+     * TODO: Some MCP clients (e.g. certain agent frameworks) attempt GET for server-initiated
+     *  SSE streams. Track these requests to evaluate whether to implement this endpoint.
      */
     @GetMapping
     fun handleGet(
-        @RequestHeader(ACCEPT_HEADER, required = false) accept: String?,
         @RequestHeader(PROTOCOL_VERSION_HEADER, required = false) protocolVersion: String?,
         @RequestHeader(SESSION_ID_HEADER, required = false) sessionId: String?,
         @RequestHeader("User-Agent", required = false) userAgent: String?,
@@ -312,14 +310,6 @@ class McpStreamableHttpController(
             throwUnavailable()
         }
         logIncomingRequest(LOGGER, "GET", servletRequest)
-
-        if (accept != null && accept.lowercase().contains("text/html")) {
-            // Browser request detected, redirect to documentation
-            return ResponseEntity.status(HttpStatus.FOUND)
-                .header("Location", DOCUMENTATION_URL)
-                .build()
-        }
-
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
     }
 

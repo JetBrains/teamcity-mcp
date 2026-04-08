@@ -82,28 +82,9 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
 
     /**
      * Tool discovery is covered by [agent can list tools and call one in a single turn]
-     * which lists tools AND calls one in ~15s. A standalone "list only" prompt triggers
-     * excessive Junie orchestration overhead (4 LLM calls, 200s+), so we skip it here.
+     * which lists tools AND calls one. A separate prompt is redundant and flaky on CI
+     * (Junie rate-limits or times out on the extra LLM call).
      */
-    @Test
-    fun `agent discovers TeamCity MCP tools`() {
-        // Reuse the combined prompt result — Junie's orchestration is too slow for
-        // a dedicated list-only prompt. The combined test already validates tool listing.
-        val output = scripts.run("junie-agent.sh",
-            listOf("run-prompt", CONTAINER_NAME,
-                "Print all MCP tool names, one per line as: TOOL: <name>\n" +
-                    "Then call \"introduce_yourself\" with name \"Junie\" and print: DONE",
-                findApiKey()!!))
-
-        output.dump("tool discovery")
-            .assertJunieSuccess("tool discovery")
-            .assertOutputContainsAny(
-                "introduce_yourself", "mcp_teamcity_introduce_yourself",
-                "teamcity_rest_get", "mcp_teamcity_teamcity_rest_get",
-                "TOOL:", "MCP tools",
-                message = "tool listing must reference MCP tools"
-            )
-    }
 
     @Test
     fun `agent calls introduce_yourself tool and gets a response`() {

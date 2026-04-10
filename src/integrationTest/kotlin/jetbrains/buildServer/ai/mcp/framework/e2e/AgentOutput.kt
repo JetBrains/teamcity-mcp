@@ -236,6 +236,7 @@ data class AgentOutput(
             Regex("\"code\":\\s*500,\\s*\"message\":\\s*\"Internal error"),
             Regex("\"code\":\\s*503"),
             Regex("\"status\":\\s*\"INTERNAL\""),
+            Regex("Unable to connect to LLM", RegexOption.IGNORE_CASE),
         )
     }
 }

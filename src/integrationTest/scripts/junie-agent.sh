@@ -42,7 +42,7 @@ cmd_run_prompt() {
         -e "JUNIE_API_KEY=$api_key" \
         -e "PATH=/home/agent/.npm-global/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         "$container" \
-        timeout 120 junie \
+        timeout 180 junie \
             --auth="$api_key" \
             --output-format json \
             "$prompt"

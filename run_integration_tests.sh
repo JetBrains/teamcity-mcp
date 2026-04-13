@@ -2,7 +2,7 @@
 # Run MCP integration and e2e tests against a TeamCity server.
 #
 # Mode 1 — Against an already-running server:
-#   TC_SERVER_URL=http://localhost:8111 TC_SERVER_TOKEN=eyJ... ./run_integration_tests.sh
+#   TC_SERVER_URL=http://localhost:8111 TC_HOME=teamcity-home TC_SERVER_TOKEN=eyJ... ./run_integration_tests.sh
 #
 # Mode 2 — Full lifecycle (setup server from dist, run tests, teardown):
 #   TC_DIST=~/Downloads/TeamCity-222175.tar.gz ./run_integration_tests.sh
@@ -63,8 +63,12 @@ if [ -n "${TC_SERVER_RESTRICTED_TOKEN:-}" ]; then
     GRADLE_ARGS+=(-DTC_SERVER_RESTRICTED_TOKEN="$TC_SERVER_RESTRICTED_TOKEN")
 fi
 
+EXIT_CODE=0
+
 echo "=== Running integration tests ==="
-./gradlew integrationTest "${GRADLE_ARGS[@]}" "$@"
+./gradlew integrationTest "${GRADLE_ARGS[@]}" "$@" || EXIT_CODE=$?
 
 echo "=== Running e2e tests ==="
-./gradlew e2eTest "${GRADLE_ARGS[@]}" "$@"
+./gradlew e2eTest "${GRADLE_ARGS[@]}" "$@" || EXIT_CODE=$?
+
+exit $EXIT_CODE

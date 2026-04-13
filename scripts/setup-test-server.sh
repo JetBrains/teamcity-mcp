@@ -9,7 +9,7 @@
 # Optional environment:
 #   TC_HOME        — where to extract TC (default: ./teamcity-home)
 #   JAVA_HOME      — JDK to use (must be set or already on PATH)
-#   TC_PORT        — server port (default: 8111)
+#   TC_PORT        — server port (default: 8211, to avoid conflicts with a local TC on 8111)
 #   TC_MCP_TOOLS   — comma-separated list of enabled MCP tools
 #   TC_MCP_RESOURCES — comma-separated list of enabled MCP resources
 #
@@ -35,7 +35,7 @@ fi
 TC_DIST="${TC_DIST_RESOLVED[0]}"
 
 TC_HOME="${TC_HOME:-teamcity-home}"
-TC_PORT="${TC_PORT:-8111}"
+TC_PORT="${TC_PORT:-8211}"
 TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,teamcity_pipeline_get,teamcity_pipeline_post,teamcity_pipeline_delete,introduce_yourself}"
 TC_MCP_RESOURCES="${TC_MCP_RESOURCES:-rest_api_guide,build_failure_analysis_guide,pipeline_guide,introduce_yourself}"
 TC_BASE_URL="http://localhost:${TC_PORT}"
@@ -80,6 +80,13 @@ echo "=== Extracting TeamCity distribution ==="
 mkdir -p "$TC_HOME"
 tar xzf "$TC_DIST" -C "$TC_HOME" --strip-components=1
 
+echo "=== Configuring server port ==="
+# Replace HTTP and shutdown ports so the test server doesn't collide with a local TC.
+sed -i.bak -e "s/port=\"8111\"/port=\"${TC_PORT}\"/g" \
+           -e "s/port=\"8105\"/port=\"$((TC_PORT + 100))\"/g" \
+           "$TC_HOME/conf/server.xml"
+rm -f "$TC_HOME/conf/server.xml.bak"
+
 echo "=== Installing MCP plugin ==="
 mkdir -p "$TC_HOME/webapps/ROOT/WEB-INF/plugins"
 cp "$PLUGIN_ZIP" "$TC_HOME/webapps/ROOT/WEB-INF/plugins/"
@@ -107,7 +114,7 @@ PROPS
 # ── Start server ─────────────────────────────────────────────────────────────
 
 echo "=== Starting TeamCity server ==="
-export TEAMCITY_SERVER_OPTS="-Dteamcity.startup.maintenance=false -Dteamcity.server.port=${TC_PORT}"
+export TEAMCITY_SERVER_OPTS="-Dteamcity.startup.maintenance=false"
 "$TC_HOME/bin/teamcity-server.sh" start
 
 echo "=== Waiting for REST API ==="
@@ -229,5 +236,6 @@ TC_SERVER_URL=${TC_BASE_URL}
 TC_SERVER_TOKEN=${ACCESS_TOKEN}
 TC_SERVER_RESTRICTED_TOKEN=${RESTRICTED_ACCESS_TOKEN}
 TC_HOME=${TC_HOME}
+TC_PORT=${TC_PORT}
 EOF
 echo "Connection parameters written to ${ENV_FILE}"

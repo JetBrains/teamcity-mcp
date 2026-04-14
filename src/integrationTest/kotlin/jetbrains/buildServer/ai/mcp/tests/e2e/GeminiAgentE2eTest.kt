@@ -118,10 +118,17 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
             .assertToolCalled("introduce_yourself")
             .assertOutputContains("RESULT:")
 
-        FusLogAssertions.assertFusEventsLogged(
-            "ai.mcp.session.requested",
-            "ai.mcp.session.started",
-            "ai.mcp.session.message.received",
+        FusLogAssertions.assertNoFusClassLoadingErrors()
+//        FusLogAssertions.assertFusEventsLogged(
+//            "ai.mcp.session.requested",
+//            "ai.mcp.session.started",
+//            "ai.mcp.session.message.received",
+//            message = "Gemini agent FUS events"
+//        )
+        FusLogAssertions.assertMcpFusEventsLogged(
+            "RequestSessionEvent",
+            "SessionStartedEvent",
+            "ExistingSessionMessageReceivedEvent",
             message = "Gemini agent FUS events"
         )
     }

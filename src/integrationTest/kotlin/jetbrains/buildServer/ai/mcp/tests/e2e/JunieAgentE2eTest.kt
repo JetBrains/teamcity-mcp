@@ -112,10 +112,17 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
                 message = "introduce_yourself tool must have been called and returned a response"
             )
 
-        FusLogAssertions.assertFusEventsLogged(
-            "ai.mcp.session.requested",
-            "ai.mcp.session.started",
-            "ai.mcp.session.message.received",
+        FusLogAssertions.assertNoFusClassLoadingErrors()
+//        FusLogAssertions.assertFusEventsLogged(
+//            "ai.mcp.session.requested",
+//            "ai.mcp.session.started",
+//            "ai.mcp.session.message.received",
+//            message = "Junie agent FUS events"
+//        )
+        FusLogAssertions.assertMcpFusEventsLogged(
+            "RequestSessionEvent",
+            "SessionStartedEvent",
+            "ExistingSessionMessageReceivedEvent",
             message = "Junie agent FUS events"
         )
     }

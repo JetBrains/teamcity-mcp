@@ -13,10 +13,10 @@ object McpFusUtils {
             Class.forName(fullClassNameToFind, false, McpFusUtils::class.java.classLoader)
             true
         } catch (_: ClassNotFoundException) {
-            LOGGER.debug("FUS events classes `$fullClassNameToFind` for MCP are not present, completely skipping MCP FUS event logging")
+            LOGGER.warn("FUS events classes `$fullClassNameToFind` for MCP are not present, completely skipping MCP FUS event logging")
             false
         } catch (e: Throwable) {
-            LOGGER.debug("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
+            LOGGER.warn("FUS events for MCP are not present: ${e.message}, completely skipping MCP FUS event logging")
             false
         }
     }

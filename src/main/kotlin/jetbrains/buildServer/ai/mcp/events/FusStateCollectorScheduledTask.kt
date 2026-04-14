@@ -57,7 +57,7 @@ open class FusStateCollectorScheduledTask(
 
     protected open fun areFusEventClassesPresent(): Boolean {
         return McpFusUtils
-            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.states.ai.McpServerStateGroup.McpServerState")
+            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.states.ai.McpServerStateGroup\$McpServerState")
     }
 
     private fun logWithProperLevel(message: String) {

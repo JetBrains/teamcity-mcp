@@ -158,6 +158,11 @@ curl -sf -u ":${SUPER_TOKEN}" -X POST "${TC_BASE_URL}/httpAuth/app/rest/users" \
 echo ""
 echo "Admin user created"
 
+echo "=== Enabling debug-all logging preset ==="
+curl -sf -u "admin:admin" -X POST "${TC_BASE_URL}/httpAuth/admin/diagnostic.html" \
+    -d "actionName=loadPreset&loggingPreset=debug-all"
+echo "debug-all logging preset activated"
+
 # ── Create permission visibility fixtures ────────────────────────────────────
 
 echo "=== Creating permission visibility fixtures ==="

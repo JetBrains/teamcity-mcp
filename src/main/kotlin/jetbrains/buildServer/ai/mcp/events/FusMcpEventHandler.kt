@@ -40,7 +40,7 @@ open class FusMcpEventHandler(
 
     protected open fun areFusEventClassesPresent(): Boolean {
         return McpFusUtils
-            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.SessionStartedEvent")
+            .areFusEventClassesPresent("org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup\$SessionStartedEvent")
     }
 
     private fun logInitializeRequested(event: McpEvent.InitializeRequested) {

@@ -27,17 +27,12 @@ Assumes familiarity with the tools — see the **REST API Guide** for tool param
 
 # Step 1: Get projects
 
-Start by getting a list of projects in the TeamCity instance using the `GET projects` endpoint.
+Start by getting a list of projects in the TeamCity instance using the `GET projects` endpoint. The result can be paginated, so be sure to handle pagination if necessary.
 
 ```
 path: /app/rest/projects
 ```
 
-""" +
-                // TODO 1: The response contains pagination + a list of projects, we should focus on the list of projects
-                // Do agents need the special instructions for this or will automatically look at the list and its contents?
-
-                """
 Key fields of project to examine:
 - **`id`** — The public project ID. If not specified, TeamCity generates one by removing all non-alphanumeric characters from the project name.
 - **`parentProjectId`** — The ID of a TeamCity project that owns this project. Returns '_Root' if this is project resides on the topmost level.
@@ -50,12 +45,8 @@ Important for displaying/organizing output
 - **`name`** — The public project name
 - **`description`** — The optional project description, or **null** if none was set.
 
-""" +
-                // TODO 2: Do agents need more info on vcsRoots? Again, contains pagination + a list of vcsRoots which are complex objects we need next
-                // What's important: the 'properties' field -> map that should contain the 'url' key (other names?)
 
-                """
-# Step 2: Examine VCS roots of each project
+# Step 2: Examine VCS roots of each project. A project can contain more VCS roots than are available initially, so be sure to fetch other pages if necessary.
 
 Key fields of VCS root to examine:
 - **`id`** — The public VCS root ID

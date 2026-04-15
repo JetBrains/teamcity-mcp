@@ -226,6 +226,7 @@ echo "Restricted access token created"
 # ── Export results ───────────────────────────────────────────────────────────
 
 echo "=== Server ready ==="
+echo "TC_HOME=${TC_HOME}"
 echo "TC_SERVER_URL=${TC_BASE_URL}"
 echo "TC_SERVER_TOKEN=${ACCESS_TOKEN}"
 echo "TC_SERVER_RESTRICTED_TOKEN=${RESTRICTED_ACCESS_TOKEN}"

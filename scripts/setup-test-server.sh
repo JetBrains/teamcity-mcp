@@ -230,6 +230,7 @@ echo "TC_SERVER_URL=${TC_BASE_URL}"
 echo "TC_SERVER_TOKEN=${ACCESS_TOKEN}"
 echo "TC_SERVER_RESTRICTED_TOKEN=${RESTRICTED_ACCESS_TOKEN}"
 
+tc_service_message "setParameter name='env.TC_HOME' value='${TC_HOME}'"
 tc_service_message "setParameter name='env.TC_SERVER_URL' value='${TC_BASE_URL}'"
 tc_service_message "setParameter name='env.TC_SERVER_TOKEN' value='${ACCESS_TOKEN}'"
 tc_service_message "setParameter name='env.TC_SERVER_RESTRICTED_TOKEN' value='${RESTRICTED_ACCESS_TOKEN}'"

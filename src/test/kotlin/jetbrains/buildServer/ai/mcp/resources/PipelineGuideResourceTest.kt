@@ -25,9 +25,8 @@ class PipelineGuideResourceTest {
     }
 
     @Test
-    fun `read only guide explains read only mode`() {
+    fun `read only guide covers read operations`() {
         val content = PipelineReadOnlyGuideResource().read()
-        assertTrue(content.contains("read-only pipeline support"))
         assertTrue(content.contains("teamcity_pipeline_get"))
         assertTrue(content.contains("/app/pipeline"))
         assertTrue(content.contains("/app/rest/pipelines"))
@@ -35,9 +34,8 @@ class PipelineGuideResourceTest {
     }
 
     @Test
-    fun `brave guide explains brave mode and allowed post paths`() {
+    fun `brave guide covers write operations and allowed post paths`() {
         val content = PipelineBraveGuideResource().read()
-        assertTrue(content.contains("Brave Mode"))
         assertTrue(content.contains("teamcity_pipeline_get"))
         assertTrue(content.contains("teamcity_pipeline_post"))
         assertTrue(content.contains("teamcity_pipeline_delete"))

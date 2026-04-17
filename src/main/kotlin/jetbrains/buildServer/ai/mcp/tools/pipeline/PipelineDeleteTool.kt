@@ -35,18 +35,11 @@ class PipelineDeleteTool(
         |Delete a TeamCity Pipeline by id.
         |
         |IMPORTANT: Read "teamcity://guides/pipelines" before using this tool.
-        |This is a destructive operation — it removes the pipeline and its backing project permanently.
+        |This is a destructive operation — it removes the pipeline and its backing project permanently. Always confirm with the user first.
         |
-        |Safety model:
-        |- Pipeline support must be enabled.
-        |- Brave mode must be enabled.
+        |Path format: /app/pipeline/<pipelineId>
         |
-        |Usage:
-        |- path=/app/pipeline/<pipelineId>
-        |
-        |Response format:
-        |- Same JSON envelope as the REST tools: meta(url,statusCode,notes), contentType, body/bodyText.
-        |- Successful deletion returns status 200 with an empty body.
+        |Response format: same JSON envelope as the REST tools — meta(url,statusCode,notes), contentType, body/bodyText. Successful deletion returns status 200 with an empty body.
     """.trimMargin()
 
     override val inputSchema = McpToolSchema(

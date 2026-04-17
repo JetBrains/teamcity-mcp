@@ -43,12 +43,8 @@ class PipelinePostTool(
         |IMPORTANT: Read "teamcity://guides/pipelines" before using this tool.
         |This tool is independent from teamcity_rest_post.
         |
-        |Safety model:
-        |- Pipeline support must be enabled.
-        |- Brave mode must be enabled.
-        |- Allowed POST paths come from the `teamcity.ai.mcp.pipeline.post.allowed.paths` property.
-        |- If that property is absent, all `/app/pipeline...` POST paths are enabled.
-        |- Some read-like pipeline helpers still use POST, so they still require brave mode and this tool.
+        |Allowed POST paths come from the `teamcity.ai.mcp.pipeline.post.allowed.paths` property. If that property is absent, all `/app/pipeline...` POST paths are enabled.
+        |Note: some read-like pipeline helpers (compatibility checks, schema generation) are POST endpoints too, so they go through this tool.
         |
         |Common endpoints:
         |- path=/app/pipeline, query=parentProjectExtId=...

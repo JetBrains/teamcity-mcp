@@ -2,14 +2,13 @@ package jetbrains.buildServer.ai.mcp.resources.rest
 
 internal object PipelineGuideContent {
     fun readOnly(): String = """
-# TeamCity Pipelines Guide: Read-Only Mode
+# TeamCity Pipelines Guide
 
-This guide teaches AI agents how to work with TeamCity Pipelines when MCP exposes read-only pipeline support.
+This guide teaches AI agents how to work with TeamCity Pipelines.
 
 TeamCity Pipelines are the modern YAML-based alternative to classic TeamCity build chains. When a user describes a CI workflow as a pipeline, staged job flow, or chain of dependent jobs, first consider whether they mean a TeamCity Pipeline rather than a traditional build-chain configuration assembled from individual build configurations and snapshot dependencies.
 
 Available tools: `teamcity_pipeline_get` (for `/app/pipeline` endpoints), `teamcity_rest_get` (for `/app/rest/pipelines` endpoints).
-Write operations (create, update, helpers) require brave mode with `teamcity_pipeline_post` and `teamcity_pipeline_delete`.
 
 For build failure diagnosis after you have a job's build id, read the resource `teamcity://guides/build-failure-analysis`.
 
@@ -28,9 +27,7 @@ Important naming note:
 - the main controller path is **`/app/pipeline`** (singular), not `/app/pipelines`
 - the REST API path is **`/app/rest/pipelines`** (plural)
 
-In MCP read-only mode:
-- use `teamcity_pipeline_get` for GET requests under `/app/pipeline...`
-- use `teamcity_rest_get` for `/app/rest/...` reads, including `/app/rest/pipelines...`
+Use `teamcity_pipeline_get` for GET requests under `/app/pipeline...`, and `teamcity_rest_get` for `/app/rest/...` reads (including `/app/rest/pipelines...`).
 
 ---
 
@@ -61,15 +58,13 @@ Conceptually:
 - **Pipeline jobs** play the role that individual build configurations often play in a classic chain.
 - **Pipeline runs** should be analyzed first as pipeline objects, then as underlying job builds when deeper diagnostics are needed.
 
-Key GET endpoints available in read-only mode:
+Key GET endpoints:
 - `GET /app/pipeline?parentProjectExtId=...` lists pipelines for a project
 - `GET /app/pipeline/{id}` reads one pipeline including its YAML
 - `GET /app/pipeline/{id}/parameters` lists parameter names (may return 400 on some versions)
 - `GET /app/pipeline/provider/vcs...` endpoints discover providers and repositories
 - `GET /app/rest/pipelines/{id}/branches` lists branches
 - `GET /app/rest/pipelines/{id}/run/{runId}` reads a pipeline run
-
-Write operations (`POST /app/pipeline`, `POST /app/pipeline/{id}`) require brave mode and `teamcity_pipeline_post` and `teamcity_pipeline_delete`.
 
 ---
 
@@ -186,7 +181,7 @@ Also available via `teamcity_rest_get`:
     """.trimIndent()
 
     fun brave(): String = """
-# TeamCity Pipelines Guide: Brave Mode
+# TeamCity Pipelines Guide
 
 TeamCity Pipelines are YAML-based CI configurations (alternative to classic build chains). Use pipeline reasoning when the user says "pipeline", refers to pipeline YAML, or describes a staged job flow.
 

@@ -56,9 +56,8 @@ class PipelinePostToolTest {
     }
 
     @Test
-    fun `description explains brave mode and absent allowlist semantics`() {
+    fun `description explains absent allowlist semantics`() {
         val description = tool().description
-        assertTrue(description.contains("Brave mode must be enabled"))
         assertTrue(description.contains("teamcity.ai.mcp.pipeline.post.allowed.paths"))
         assertTrue(description.contains("If that property is absent, all `/app/pipeline...` POST paths are enabled."))
     }

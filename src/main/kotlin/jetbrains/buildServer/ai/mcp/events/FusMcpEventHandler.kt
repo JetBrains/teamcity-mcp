@@ -48,7 +48,7 @@ open class FusMcpEventHandler(
         val fusEvent = RequestSessionEvent(
             userId = getCurrentUserIdOrEmpty(),
             requestedProtocolVersion = event.protocolVersion,
-            mcpClientToolName = clientName,
+            mcpClientToolName = clientName?.lowercase(),
             mcpClientToolVersion = clientVersion
         )
         LOGGER.debug("Sending FUS event: $fusEvent")
@@ -60,7 +60,7 @@ open class FusMcpEventHandler(
         val fusEvent = SessionStartedEvent(
             userId = getCurrentUserIdOrEmpty(),
             mcpSessionId = event.sessionId,
-            mcpClientToolName = clientName,
+            mcpClientToolName = clientName?.lowercase(),
             mcpClientToolVersion = clientVersion
         )
         LOGGER.debug("Sending FUS event: $fusEvent")

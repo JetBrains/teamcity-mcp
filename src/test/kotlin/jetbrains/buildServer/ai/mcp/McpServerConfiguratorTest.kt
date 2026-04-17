@@ -3,9 +3,8 @@ package jetbrains.buildServer.ai.mcp
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
+import jetbrains.buildServer.ai.mcp.resources.BraveModeAwareMcpResource
 import jetbrains.buildServer.ai.mcp.resources.McpResource
-import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
-import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
@@ -21,7 +20,7 @@ import org.junit.jupiter.api.Test
 
 class McpServerConfiguratorTest {
 
-    private val settingsService: SettingsService = mockk()
+    private val settingsService: SettingsService = mockk(relaxed = true)
 
     @AfterEach
     fun tearDown() {
@@ -199,32 +198,83 @@ class McpServerConfiguratorTest {
             assertTrue(configurator.getEnabledResources().isEmpty())
         }
 
+    }
+
+    // -----------------------------------------------------------------------
+    // BraveModeAware filtering
+    // -----------------------------------------------------------------------
+
+    @Nested
+    inner class BraveModeAwareFiltering {
+
         @Test
-        fun `getEnabledResources selects only read only pipeline guide when brave mode is off`() {
-            every { settingsService.getEnabledResourceNames() } returns setOf("pipeline_guide")
+        fun `non-BraveModeAware resources are always enabled regardless of brave mode`() {
+            every { settingsService.getEnabledResourceNames() } returns setOf("plain")
             every { settingsService.isBraveModeEnabled() } returns false
 
-            val configurator = configurator(
-                resources = listOf(PipelineReadOnlyGuideResource(), PipelineBraveGuideResource())
-            )
+            val configurator = configurator(resources = listOf(testResource("plain")))
+            assertEquals(1, configurator.getEnabledResources().size)
 
-            val enabled = configurator.getEnabledResources()
-            assertEquals(1, enabled.size)
-            assertTrue(enabled.single() is PipelineReadOnlyGuideResource)
+            every { settingsService.isBraveModeEnabled() } returns true
+            assertEquals(1, configurator.getEnabledResources().size)
         }
 
         @Test
-        fun `getEnabledResources selects only brave pipeline guide when brave mode is on`() {
-            every { settingsService.getEnabledResourceNames() } returns setOf("pipeline_guide")
+        fun `BraveModeAware with brave=true is included only when brave mode is on`() {
+            every { settingsService.getEnabledResourceNames() } returns setOf("brave_only")
+            every { settingsService.isBraveModeEnabled() } returns false
+
+            val configurator = configurator(
+                resources = listOf(testBraveResource("brave_only", brave = true))
+            )
+            assertTrue(configurator.getEnabledResources().isEmpty())
+
+            every { settingsService.isBraveModeEnabled() } returns true
+            assertEquals(1, configurator.getEnabledResources().size)
+        }
+
+        @Test
+        fun `BraveModeAware with brave=false is included only when brave mode is off`() {
+            every { settingsService.getEnabledResourceNames() } returns setOf("safe_only")
             every { settingsService.isBraveModeEnabled() } returns true
 
             val configurator = configurator(
-                resources = listOf(PipelineReadOnlyGuideResource(), PipelineBraveGuideResource())
+                resources = listOf(testBraveResource("safe_only", brave = false))
             )
+            assertTrue(configurator.getEnabledResources().isEmpty())
 
-            val enabled = configurator.getEnabledResources()
-            assertEquals(1, enabled.size)
-            assertTrue(enabled.single() is PipelineBraveGuideResource)
+            every { settingsService.isBraveModeEnabled() } returns false
+            assertEquals(1, configurator.getEnabledResources().size)
+        }
+
+        @Test
+        fun `paired brave+safe variants yield exactly one resource per mode`() {
+            val safe = testBraveResource("guide", brave = false)
+            val brave = testBraveResource("guide", brave = true)
+            every { settingsService.getEnabledResourceNames() } returns setOf("guide")
+
+            val configurator = configurator(resources = listOf(safe, brave))
+
+            every { settingsService.isBraveModeEnabled() } returns false
+            val offEnabled = configurator.getEnabledResources()
+            assertEquals(1, offEnabled.size)
+            assertEquals(false, (offEnabled.single() as BraveModeAwareMcpResource).brave)
+
+            every { settingsService.isBraveModeEnabled() } returns true
+            val onEnabled = configurator.getEnabledResources()
+            assertEquals(1, onEnabled.size)
+            assertEquals(true, (onEnabled.single() as BraveModeAwareMcpResource).brave)
+        }
+
+        @Test
+        fun `shortName filter runs before brave filter — disabled shortName never appears`() {
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            every { settingsService.isBraveModeEnabled() } returns true
+
+            val configurator = configurator(
+                resources = listOf(testBraveResource("guide", brave = true))
+            )
+            assertTrue(configurator.getEnabledResources().isEmpty())
         }
     }
 
@@ -248,6 +298,16 @@ class McpServerConfiguratorTest {
     private fun testResource(resName: String) = object : McpResource {
         override val uri = "test://resources/$resName"
         override val name = "Test Resource $resName"
+        override val shortName = resName
+        override val description = "Test resource $resName"
+        override val mimeType = "text/plain"
+        override fun read(): String = "Content of $resName"
+    }
+
+    private fun testBraveResource(resName: String, brave: Boolean) = object : BraveModeAwareMcpResource {
+        override val brave = brave
+        override val uri = "test://resources/$resName"
+        override val name = "Test BraveModeAware $resName (brave=$brave)"
         override val shortName = resName
         override val description = "Test resource $resName"
         override val mimeType = "text/plain"

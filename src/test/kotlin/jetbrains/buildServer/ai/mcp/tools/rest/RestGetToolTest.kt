@@ -25,6 +25,8 @@ class RestGetToolTest {
     ) = object : RestApiClient {
         override suspend fun get(path: String, query: String) = RestApiResponse(body, statusCode, truncated)
         override suspend fun post(path: String, query: String, body: String) = throw UnsupportedOperationException()
+        override suspend fun put(path: String, query: String, body: String) = throw UnsupportedOperationException()
+        override suspend fun delete(path: String, query: String) = throw UnsupportedOperationException()
     }
 
     /** Client that captures path and query for assertions. */
@@ -41,6 +43,12 @@ class RestGetToolTest {
         }
 
         override suspend fun post(path: String, query: String, body: String): RestApiResponse =
+            throw UnsupportedOperationException()
+
+        override suspend fun put(path: String, query: String, body: String): RestApiResponse =
+            throw UnsupportedOperationException()
+
+        override suspend fun delete(path: String, query: String): RestApiResponse =
             throw UnsupportedOperationException()
     }
 
@@ -75,10 +83,9 @@ class RestGetToolTest {
     }
 
     @Test
-    fun `description clarifies fields are for json endpoints with plain text exception`() {
+    fun `description references the rest api guide resource`() {
         val description = tool().description
-        Assertions.assertTrue(description.contains("For JSON endpoints"))
-        Assertions.assertTrue(description.contains("plain text"))
+        Assertions.assertTrue(description.contains("teamcity://guides/rest-api"))
     }
 
     @Test
@@ -664,6 +671,8 @@ class RestGetToolTest {
         private fun throwingClient(e: Exception) = object : RestApiClient {
             override suspend fun get(path: String, query: String): RestApiResponse = throw e
             override suspend fun post(path: String, query: String, body: String): RestApiResponse = throw e
+            override suspend fun put(path: String, query: String, body: String): RestApiResponse = throw e
+            override suspend fun delete(path: String, query: String): RestApiResponse = throw e
         }
 
         @Test

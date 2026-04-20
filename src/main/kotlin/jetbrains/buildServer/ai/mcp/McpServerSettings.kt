@@ -8,8 +8,10 @@ import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestPutTool
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import org.springframework.stereotype.Service
 
@@ -41,6 +43,11 @@ class SettingsService {
             add(RestGetTool.NAME)
             add(RestPostTool.NAME)
             add(BuildLogTool.NAME)
+
+            if (isBraveModeEnabled()) {
+                add(RestPutTool.NAME)
+                add(RestDeleteTool.NAME)
+            }
 
             if (isPipelineEnabled()) {
                 add(PipelineGetTool.NAME)
@@ -78,16 +85,16 @@ class SettingsService {
     /**
      * Returns the set of REST API paths that the POST tool is allowed to call.
      */
-    fun getRestPostAllowedPaths(): Set<String> {
-        val raw = TeamCityProperties.getPropertyOrNull(MCP_REST_POST_ALLOWED_PATHS)
-            ?: return setOf(BUILD_QUEUE_PATH)
-        if (raw.isBlank()) return emptySet()
-        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-    }
+    fun getRestPostAllowedPaths(): Set<String>? = parsePathSet(MCP_REST_POST_ALLOWED_PATHS)
 
-    fun getPipelinePostAllowedPaths(): Set<String>? {
-        val raw = TeamCityProperties.getPropertyOrNull(MCP_PIPELINE_POST_ALLOWED_PATHS) ?: return null
+    fun getPipelinePostAllowedPaths(): Set<String>? = parsePathSet(MCP_PIPELINE_POST_ALLOWED_PATHS)
+
+    private fun parsePathSet(propertyName: String): Set<String>? {
+        val raw = TeamCityProperties.getPropertyOrNull(propertyName) ?: return null
         if (raw.isBlank()) return emptySet()
-        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        return raw.split(",")
+            .map { it.trim().trimEnd('/') }
+            .filter { it.isNotEmpty() }
+            .toSet()
     }
 }

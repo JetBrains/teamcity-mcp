@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component
 interface RestApiClient {
     suspend fun get(path: String, query: String): RestApiResponse
     suspend fun post(path: String, query: String, body: String): RestApiResponse
+    suspend fun put(path: String, query: String, body: String): RestApiResponse
+    suspend fun delete(path: String, query: String): RestApiResponse
 }
 
 data class RestApiResponse(
@@ -53,12 +55,8 @@ class RestGetTool(
         private val LOCATOR_COUNT_PATTERN = Regex("""(?:^|,)count:(\d+)""")
         private val EMPTY_COUNT_PATTERN = Regex("""^\s*\{\s*"count"\s*:\s*0\s*[,}]""")
 
-        private val ERROR_GUIDANCE = mapOf(
-            400 to "Check your query syntax — locator or fields may be malformed.",
-            403 to "Access denied. The current token may lack permission for this endpoint.",
-            404 to "Resource not found. Check the path and locator — the resource may not exist or the ID may be wrong.",
-            405 to "Method not allowed on this endpoint.",
-            500 to "TeamCity server error. Try again or simplify the query."
+        private val ERROR_GUIDANCE = RestToolUtils.COMMON_ERROR_GUIDANCE + mapOf(
+            400 to "Check your query syntax — locator or fields may be malformed."
         )
     }
 
@@ -70,23 +68,12 @@ class RestGetTool(
         |IMPORTANT: Before your first REST API call, read the resource "teamcity://guides/rest-api" for comprehensive guidance on endpoints, locators, field selection, and pagination.
         |For investigating build failures, also read "teamcity://guides/build-failure-analysis" for a step-by-step methodology.
         |
-        |For JSON endpoints, always use 'fields' to select only the data you need - this is critical for keeping responses manageable.
-        |Some endpoints return plain text (e.g. /builds/aggregated/.../status), where 'fields' is not applicable.
-        |Always paginate with 'start' and 'count' inside the locator (max $MAX_PAGE_SIZE). Do NOT use start/count as top-level query parameters — they are deprecated.
-        |
-        |Response format:
-        |- Tool output is a JSON envelope with:
-        |  meta(url,statusCode,truncated,hasNextHref,notes),
-        |  contentType, and either body (JSON) or bodyText (plain text).
-        |- Use meta.notes for guidance and warnings.
+        |Response format: JSON envelope with meta(url,statusCode,truncated,hasNextHref,notes), contentType, and either body (JSON) or bodyText (plain text). Use meta.notes for guidance and warnings; use nextHref to fetch the next page.
         |
         |Tips:
-        |- Use fields=count to check total items before listing them.
-        |- Use nextHref from responses to fetch the next page.
-        |- If response is too large, use narrower fields or smaller count.
-        |- If a request fails, adjust the query syntax and retry.
-        |- Do not URL-encode parameters yourself - the server handles encoding.
-        |- Use defaultFilter:true in locator to exclude canceled and personal builds.
+        |- Always specify `fields` for JSON endpoints to keep responses manageable; use `fields=count` to check size first.
+        |- Paginate inside the locator with `start:N,count:M` (max $MAX_PAGE_SIZE). Do not URL-encode parameters.
+        |- Use `defaultFilter:true` to exclude canceled and personal builds.
     """.trimMargin()
 
     override val inputSchema = McpToolSchema(

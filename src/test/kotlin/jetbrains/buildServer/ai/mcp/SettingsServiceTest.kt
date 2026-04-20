@@ -8,12 +8,15 @@ import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestPutTool
 import jetbrains.buildServer.serverSide.TeamCityProperties
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -92,6 +95,43 @@ class SettingsServiceTest {
         every { TeamCityProperties.getPropertyOrNull(MCP_PIPELINE_POST_ALLOWED_PATHS) } returns null
 
         assertEquals(null, settingsService.getPipelinePostAllowedPaths())
+    }
+
+    @Test
+    fun `rest post allowlist returns null when property is absent`() {
+        mockkStatic(TeamCityProperties::class)
+        every { TeamCityProperties.getPropertyOrNull(MCP_REST_POST_ALLOWED_PATHS) } returns null
+
+        assertNull(settingsService.getRestPostAllowedPaths())
+    }
+
+    @Test
+    fun `rest post allowlist parses comma-separated paths`() {
+        mockkStatic(TeamCityProperties::class)
+        every { TeamCityProperties.getPropertyOrNull(MCP_REST_POST_ALLOWED_PATHS) } returns
+            "/app/rest/buildQueue,/app/rest/investigations"
+
+        assertEquals(
+            setOf("/app/rest/buildQueue", "/app/rest/investigations"),
+            settingsService.getRestPostAllowedPaths()
+        )
+    }
+
+    @Test
+    fun `default tools include rest put and delete only when brave mode is on`() {
+        mockkStatic(TeamCityProperties::class)
+        every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
+        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
+
+        val offEnabled = settingsService.getEnabledToolNames()
+        assertFalse(offEnabled.contains(RestPutTool.NAME))
+        assertFalse(offEnabled.contains(RestDeleteTool.NAME))
+
+        every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns true
+        val onEnabled = settingsService.getEnabledToolNames()
+        assertTrue(onEnabled.contains(RestPutTool.NAME))
+        assertTrue(onEnabled.contains(RestDeleteTool.NAME))
     }
 
     @Test

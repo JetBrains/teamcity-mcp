@@ -104,6 +104,30 @@ abstract class McpIntegrationTestBase {
         return listPipelines().any { it["id"]?.jsonPrimitive?.content == pipelineId }
     }
 
+    protected fun projectExists(projectId: String): Boolean {
+        val response = sendTeamCityRequest("/app/rest/projects/id:$projectId")
+        return response.statusCode() in 200..299
+    }
+
+    protected fun createProject(projectId: String, parentProjectId: String = "_Root") {
+        val payload = buildJsonObject {
+            put("id", projectId)
+            put("name", projectId)
+            put("parentProject", buildJsonObject { put("id", parentProjectId) })
+        }
+        val response = sendTeamCityRequest("/app/rest/projects", "POST", payload.toString())
+        check(response.statusCode() in 200..299) {
+            "Failed to create project '$projectId': HTTP ${response.statusCode()} body=${response.body()}"
+        }
+    }
+
+    protected fun deleteProject(projectId: String) {
+        val response = sendTeamCityRequest("/app/rest/projects/id:$projectId", "DELETE")
+        check(response.statusCode() in 200..299 || response.statusCode() == 404) {
+            "Failed to delete project '$projectId': HTTP ${response.statusCode()} body=${response.body()}"
+        }
+    }
+
     private fun prop(name: String): String? = System.getProperty(name) ?: System.getenv(name)
 
     private fun sendTeamCityRequest(

@@ -10,13 +10,13 @@
 #   TC_HOME        — where to extract TC (default: ./teamcity-home)
 #   JAVA_HOME      — JDK to use (must be set or already on PATH)
 #   TC_PORT        — server port (default: 8211, to avoid conflicts with a local TC on 8111)
-#   TC_MCP_TOOLS   — comma-separated list of enabled MCP tools
-#   TC_MCP_RESOURCES — comma-separated list of enabled MCP resources
 #
-# Outputs (to stdout):
+# Outputs (to stdout and .test-server.env):
 #   TC_SERVER_URL=...
 #   TC_SERVER_TOKEN=...
 #   TC_SERVER_RESTRICTED_TOKEN=...
+#   TC_HOME=...
+#   TC_DATA_PATH=...   (TeamCity data dir, contains config/internal.properties)
 #
 # On TeamCity CI, also emits ##teamcity[setParameter ...] service messages.
 
@@ -36,8 +36,6 @@ TC_DIST="${TC_DIST_RESOLVED[0]}"
 
 TC_HOME="${TC_HOME:-teamcity-home}"
 TC_PORT="${TC_PORT:-8211}"
-TC_MCP_TOOLS="${TC_MCP_TOOLS:-feedback,teamcity_build_log,teamcity_rest_get,teamcity_rest_post,teamcity_pipeline_get,teamcity_pipeline_post,teamcity_pipeline_delete,introduce_yourself}"
-TC_MCP_RESOURCES="${TC_MCP_RESOURCES:-rest_api_guide,build_failure_analysis_guide,pipeline_guide,introduce_yourself}"
 TC_BASE_URL="http://localhost:${TC_PORT}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -100,12 +98,12 @@ mkdir -p "$TEAMCITY_DATA_PATH/config"
 mkdir -p "$TEAMCITY_DATA_PATH/system"
 
 echo "=== Writing internal properties ==="
+# teamcity.development.mode=true makes the plugin advertise the introduce_yourself
+# tool and resource (used by smoke + e2e tests for agent-discovery coverage).
 cat > "$TEAMCITY_DATA_PATH/config/internal.properties" <<PROPS
 teamcity.licenseAgreement.accepted=true
 teamcity.ai.mcp.braveMode.enabled=true
 teamcity.ai.mcp.pipeline.enabled=true
-teamcity.ai.mcp.tools.enabled=${TC_MCP_TOOLS}
-teamcity.ai.mcp.resources.enabled=${TC_MCP_RESOURCES}
 teamcity.internal.fus.debugToLogs=true
 teamcity.internal.fus.flushInterval=5000
 teamcity.development.mode=true
@@ -227,11 +225,13 @@ echo "Restricted access token created"
 
 echo "=== Server ready ==="
 echo "TC_HOME=${TC_HOME}"
+echo "TC_DATA_PATH=${TEAMCITY_DATA_PATH}"
 echo "TC_SERVER_URL=${TC_BASE_URL}"
 echo "TC_SERVER_TOKEN=${ACCESS_TOKEN}"
 echo "TC_SERVER_RESTRICTED_TOKEN=${RESTRICTED_ACCESS_TOKEN}"
 
 tc_service_message "setParameter name='env.TC_HOME' value='${TC_HOME}'"
+tc_service_message "setParameter name='env.TC_DATA_PATH' value='${TEAMCITY_DATA_PATH}'"
 tc_service_message "setParameter name='env.TC_SERVER_URL' value='${TC_BASE_URL}'"
 tc_service_message "setParameter name='env.TC_SERVER_TOKEN' value='${ACCESS_TOKEN}'"
 tc_service_message "setParameter name='env.TC_SERVER_RESTRICTED_TOKEN' value='${RESTRICTED_ACCESS_TOKEN}'"
@@ -243,6 +243,7 @@ TC_SERVER_URL=${TC_BASE_URL}
 TC_SERVER_TOKEN=${ACCESS_TOKEN}
 TC_SERVER_RESTRICTED_TOKEN=${RESTRICTED_ACCESS_TOKEN}
 TC_HOME=${TC_HOME}
+TC_DATA_PATH=${TEAMCITY_DATA_PATH}
 TC_PORT=${TC_PORT}
 EOF
 echo "Connection parameters written to ${ENV_FILE}"

@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest
 
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
+import jetbrains.buildServer.ai.mcp.MCP_REST_POST_ALLOWED_PATHS
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
@@ -14,16 +15,25 @@ import kotlinx.serialization.json.putJsonObject
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
+/**
+ * Brave-mode variant of the REST POST tool. Shares the tool name [RestPostTool.NAME]
+ * (`teamcity_rest_post`) so that MCP clients see the same tool name regardless of mode —
+ * the server's configurator selects this bean when brave mode is on and the safe
+ * [RestPostTool] otherwise.
+ *
+ * Differences from [RestPostTool]:
+ *  - Default allowlist is "allow all" (no `{buildQueue}` restriction).
+ *  - Does NOT force `"personal": true` in the request body.
+ *  - Does NOT inject a default `comment` for buildQueue requests.
+ */
 @Component
-class RestPostTool(
+class RestPostBraveTool(
     @Autowired(required = false) private val restApiClient: RestApiClient? = null,
     private val settingsService: SettingsService
 ) : McpTool {
 
     companion object {
-        private val LOGGER = Logger.getInstance(RestPostTool::class.java.name)
-
-        internal const val NAME = "teamcity_rest_post"
+        private val LOGGER = Logger.getInstance(RestPostBraveTool::class.java.name)
 
         private val ERROR_GUIDANCE = RestToolUtils.COMMON_ERROR_GUIDANCE + mapOf(
             400 to "Check the request body structure — it may be malformed or missing required fields.",
@@ -32,23 +42,17 @@ class RestPostTool(
         )
     }
 
-    override val name = NAME
+    override val name = RestPostTool.NAME
 
     override val description = """
         |Perform a POST request to the TeamCity REST API.
         |
-        |IMPORTANT: Before your first use, read the resource "teamcity://guides/rest-api" (Part 2) for guidance on triggering builds, request body format, and monitoring workflows.
+        |IMPORTANT: Read "teamcity://guides/rest-api" before using this tool.
         |
-        |Limited to allowed endpoints (default: $BUILD_QUEUE_PATH). All requests are enforced as personal builds — the tool automatically sets `"personal": true` in the request body.
-        |Use this for safe, isolated actions such as queueing a personal build and then inspecting it with teamcity_rest_get and teamcity_build_log.
+        |The body is passed through unchanged — nothing is injected or rewritten. A POST to `$BUILD_QUEUE_PATH` without `"personal": true` creates a real, team-visible queued build; include `"personal": true` in the body for an isolated run.
+        |Allowed POST paths come from the `$MCP_REST_POST_ALLOWED_PATHS` property; when unset, all `/app/rest/...` POST paths are allowed.
         |
         |Response format: same JSON envelope as teamcity_rest_get — meta(url, statusCode, notes), contentType, body/bodyText.
-        |
-        |Example — trigger a personal build:
-        |  path: $BUILD_QUEUE_PATH
-        |  body: {"buildType":{"id":"MyBuildConfig_Build"}}
-        |  query: moveToTop=true
-        |  fields: id,number,status,personal,buildType(id,name)
     """.trimMargin()
 
     override val inputSchema = McpToolSchema(
@@ -58,7 +62,11 @@ class RestPostTool(
                 put(
                     "description", """
                     |REST API endpoint path starting with /app/rest/.
-                    |Allowed endpoints are controlled by server configuration (default: $BUILD_QUEUE_PATH).
+                    |Examples:
+                    |  /app/rest/buildQueue                        — trigger a (non-personal) build
+                    |  /app/rest/buildQueue/id:123/approve         — approve a queued build
+                    |  /app/rest/builds/id:123/tags/               — add a tag
+                    |  /app/rest/projects                          — create a project
                 """.trimMargin()
                 )
             }
@@ -66,37 +74,23 @@ class RestPostTool(
                 put("type", "string")
                 put(
                     "description", """
-                    |JSON request body. Must be a JSON object.
-                    |The tool automatically enforces "personal": true in the body.
+                    |JSON request body. Must be a JSON object. Passed through unchanged.
                     |
-                    |Example for triggering a build:
-                    |  {"buildType":{"id":"MyBuildConfig_Build"}}
+                    |Example — trigger a build on a specific branch:
+                    |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-x"}
                     |
-                    |With branch:
-                    |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-branch"}
-                    |
-                    |With comment:
-                    |  {"buildType":{"id":"MyBuildConfig_Build"},"comment":{"text":"Triggered by AI agent"}}
-                """.trimMargin()
-                )
-            }
-            putJsonObject("fields") {
-                put("type", "string")
-                put(
-                    "description", """
-                    |Field selection for the response. Controls which fields are returned.
-                    |Example: id,number,status,personal,buildType(id,name)
+                    |Example — add a tag:
+                    |  {"tag":[{"name":"release"}]}
                 """.trimMargin()
                 )
             }
             putJsonObject("query") {
                 put("type", "string")
-                put(
-                    "description", """
-                    |Optional query parameters without leading '?'. Use for endpoint-specific flags and extra response shaping.
-                    |Example: moveToTop=true
-                """.trimMargin()
-                )
+                put("description", "Optional query parameters without leading '?'. Combine with 'fields' or replace it.")
+            }
+            putJsonObject("fields") {
+                put("type", "string")
+                put("description", "Field selection for the response, e.g. id,number,status.")
             }
         },
         required = listOf("path", "body")
@@ -110,8 +104,8 @@ class RestPostTool(
         RestToolUtils.validatePath(path)?.let { return it }
 
         val normalizedPath = path.trimEnd('/')
-        val allowedPaths = settingsService.getRestPostAllowedPaths() ?: setOf(BUILD_QUEUE_PATH)
-        RestToolUtils.checkAllowedPath("POST", normalizedPath, allowedPaths)?.let { return it }
+        RestToolUtils.checkAllowedPath("POST", normalizedPath, settingsService.getRestPostAllowedPaths())
+            ?.let { return it }
 
         val bodyStr = arguments["body"]?.jsonPrimitive?.content?.trim()
             ?.takeIf { it.isNotBlank() }
@@ -119,7 +113,6 @@ class RestPostTool(
 
         val parsedBody = RestToolUtils.parseJsonOrNull(bodyStr)
             ?: return McpToolResult.error("'body' must be valid JSON")
-
         if (parsedBody !is JsonObject) {
             return McpToolResult.error("'body' must be a JSON object, not a JSON array or primitive")
         }
@@ -127,30 +120,14 @@ class RestPostTool(
         val client = restApiClient
             ?: return McpToolResult.error("REST API client is not configured")
 
-        // Enforce personal=true and default comment for buildQueue
-        val enforcedBody = buildJsonObject {
-            parsedBody.forEach { (key, value) ->
-                if (key != "personal") put(key, value)
-            }
-            put("personal", true)
-            if (normalizedPath == BUILD_QUEUE_PATH && !parsedBody.containsKey("comment")) {
-                putJsonObject("comment") {
-                    put("text", "Triggered via MCP")
-                }
-            }
-        }
-
         val query = buildQuery(
             rawQuery = arguments["query"]?.jsonPrimitive?.content?.trim()?.removePrefix("?"),
             fields = arguments["fields"]?.jsonPrimitive?.content?.trim()
         )
 
         return try {
-            val response = client.post(normalizedPath, query, enforcedBody.toString())
-            RestToolUtils.formatResponse(
-                normalizedPath, query, response,
-                notes = listOf("\"personal\": true was enforced in the request body.")
-            )
+            val response = client.post(normalizedPath, query, parsedBody.toString())
+            RestToolUtils.formatResponse(normalizedPath, query, response)
         } catch (e: RestApiException) {
             LOGGER.warnAndDebugDetails("REST POST $normalizedPath failed with HTTP ${e.statusCode}", e)
             McpToolResult.error(RestToolUtils.formatRestApiError(e, ERROR_GUIDANCE))

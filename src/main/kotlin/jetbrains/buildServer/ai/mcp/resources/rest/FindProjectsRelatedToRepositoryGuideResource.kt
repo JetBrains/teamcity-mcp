@@ -8,7 +8,7 @@ class FindProjectsRelatedToRepositoryGuideResource : McpResource {
     companion object {
         const val SETTINGS_NAME = "find_projects_related_to_repository_guide"
         private val CONTENT = ("""
-Find build configurations related to a repository guide
+Find projects and build configurations related to a repository guide
             
 A step-by-step playbook for finding TeamCity projects that use a given repository.
 Assumes familiarity with the tools — see the **REST API Guide** for tool parameters, field syntax, locators, pagination, and response format.

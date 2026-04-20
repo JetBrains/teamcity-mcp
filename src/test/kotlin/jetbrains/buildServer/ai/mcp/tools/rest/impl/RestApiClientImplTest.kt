@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest.impl
 
 import io.mockk.every
 import io.mockk.mockk
+import jetbrains.buildServer.ai.mcp.tools.rest.RestApiException
 import jetbrains.buildServer.controllers.BaseController
 import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletRequest
@@ -10,6 +11,7 @@ import jetbrains.buildServer.users.SUser
 import jetbrains.spring.web.UrlMapping
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.security.core.Authentication
@@ -72,29 +74,33 @@ class RestApiClientImplTest {
     }
 
     @Test
-    fun `get captures non-200 status codes`() {
+    fun `get throws on non-200 status codes`() {
         setupController { response ->
             response.status = 404
             response.writer.write("Not Found")
         }
 
-        val result = runBlocking {
-            executionContext.withOperationContext(user = user) {
-                client.get("/app/rest/missing", "")
+        val error = assertThrows(RestApiException::class.java) {
+            runBlocking {
+                executionContext.withOperationContext(user = user) {
+                    client.get("/app/rest/missing", "")
+                }
             }
         }
 
-        assertEquals(404, result.statusCode)
-        assertEquals("Not Found", result.body)
+        assertEquals(404, error.statusCode)
+        assertEquals("Not Found", error.message)
     }
 
     @Test
-    fun `get returns 401 when no user in context`() {
-        val result = runBlocking {
-            client.get("/app/rest/server", "")
+    fun `get throws 401 when no user in context`() {
+        val error = assertThrows(RestApiException::class.java) {
+            runBlocking {
+                client.get("/app/rest/server", "")
+            }
         }
 
-        assertEquals(401, result.statusCode)
+        assertEquals(401, error.statusCode)
     }
 
     @Test
@@ -116,20 +122,22 @@ class RestApiClientImplTest {
     }
 
     @Test
-    fun `post captures non-200 status codes`() {
+    fun `post throws on non-200 status codes`() {
         setupController { response ->
             response.status = 403
             response.writer.write("Forbidden")
         }
 
-        val result = runBlocking {
-            executionContext.withOperationContext(user = user) {
-                client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+        val error = assertThrows(RestApiException::class.java) {
+            runBlocking {
+                executionContext.withOperationContext(user = user) {
+                    client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+                }
             }
         }
 
-        assertEquals(403, result.statusCode)
-        assertEquals("Forbidden", result.body)
+        assertEquals(403, error.statusCode)
+        assertEquals("Forbidden", error.message)
     }
 
     @Test
@@ -144,8 +152,37 @@ class RestApiClientImplTest {
 
         assertEquals("POST", fakeRequest.method)
         assertTrue(fakeRequest.getAttribute("INTERNAL_REQUEST") != null)
+        assertTrue(fakeRequest.getHeader("accept").contains("application/json"))
+        assertTrue(fakeRequest.getHeader("accept").contains("text/plain"))
         assertEquals("application/json", fakeRequest.getHeader("content-type"))
-        assertEquals("application/json", fakeRequest.getHeader("accept"))
+    }
+
+    @Test
+    fun `put uses text plain content type for scalar bodies`() {
+        val fakeRequest = setupController { it.status = 200 }
+
+        runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.put("/app/rest/builds/id:1/comment", "", "release candidate")
+            }
+        }
+
+        assertEquals("PUT", fakeRequest.method)
+        assertEquals("text/plain", fakeRequest.getHeader("content-type"))
+    }
+
+    @Test
+    fun `put uses json content type for object bodies`() {
+        val fakeRequest = setupController { it.status = 200 }
+
+        runBlocking {
+            executionContext.withOperationContext(user = user) {
+                client.put("/app/rest/agents/id:1/enabledInfo", "", """{"status":false}""")
+            }
+        }
+
+        assertEquals("PUT", fakeRequest.method)
+        assertEquals("application/json", fakeRequest.getHeader("content-type"))
     }
 
     @Test
@@ -178,29 +215,34 @@ class RestApiClientImplTest {
 
         assertEquals("GET", fakeRequest.method)
         assertTrue(fakeRequest.getAttribute("INTERNAL_REQUEST") != null)
-        assertEquals("application/json", fakeRequest.getHeader("accept"))
+        assertTrue(fakeRequest.getHeader("accept").contains("application/json"))
+        assertTrue(fakeRequest.getHeader("accept").contains("text/plain"))
     }
 
     @Test
-    fun `post returns 401 when no user in context`() {
-        val result = runBlocking {
-            client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
-        }
-
-        assertEquals(401, result.statusCode)
-    }
-
-    @Test
-    fun `returns 503 when controller not found`() {
-        every { fakeHttpRequestsFactory.get(any(), any()) } returns FakeHttpServletRequest()
-        every { urlMapping.handlerMap } returns emptyMap()
-
-        val result = runBlocking {
-            executionContext.withOperationContext(user = user) {
+    fun `post throws 401 when no user in context`() {
+        val error = assertThrows(RestApiException::class.java) {
+            runBlocking {
                 client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
             }
         }
 
-        assertEquals(503, result.statusCode)
+        assertEquals(401, error.statusCode)
+    }
+
+    @Test
+    fun `throws 503 when controller not found`() {
+        every { fakeHttpRequestsFactory.get(any(), any()) } returns FakeHttpServletRequest()
+        every { urlMapping.handlerMap } returns emptyMap()
+
+        val error = assertThrows(RestApiException::class.java) {
+            runBlocking {
+                executionContext.withOperationContext(user = user) {
+                    client.post("/app/rest/buildQueue", "", """{"buildType":{"id":"bt1"}}""")
+                }
+            }
+        }
+
+        assertEquals(503, error.statusCode)
     }
 }

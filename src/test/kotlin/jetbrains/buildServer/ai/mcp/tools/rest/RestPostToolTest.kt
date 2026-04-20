@@ -38,6 +38,8 @@ class RestPostToolTest {
     ) = object : RestApiClient {
         override suspend fun get(path: String, query: String) = throw UnsupportedOperationException()
         override suspend fun post(path: String, query: String, body: String) = RestApiResponse(responseBody, statusCode)
+        override suspend fun put(path: String, query: String, body: String) = throw UnsupportedOperationException()
+        override suspend fun delete(path: String, query: String) = throw UnsupportedOperationException()
     }
 
     /** Client that captures arguments for assertions. */
@@ -57,6 +59,12 @@ class RestPostToolTest {
             capturedBody = body
             return response
         }
+
+        override suspend fun put(path: String, query: String, body: String): RestApiResponse =
+            throw UnsupportedOperationException()
+
+        override suspend fun delete(path: String, query: String): RestApiResponse =
+            throw UnsupportedOperationException()
     }
 
     // -----------------------------------------------------------------------
@@ -71,10 +79,11 @@ class RestPostToolTest {
         }
 
         @Test
-        fun `schema declares path body and fields properties`() {
+        fun `schema declares path body query and fields properties`() {
             val props = tool().inputSchema.properties!!
             assertTrue(props.containsKey("path"))
             assertTrue(props.containsKey("body"))
+            assertTrue(props.containsKey("query"))
             assertTrue(props.containsKey("fields"))
         }
 
@@ -387,6 +396,47 @@ class RestPostToolTest {
         }
     }
 
+    @Nested
+    inner class QueryHandling {
+        @Test
+        fun `query is passed through and combined with fields`() = runBlocking {
+            val client = CapturingClient()
+            tool(client).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("body", """{"buildType":{"id":"bt1"}}""")
+                put("query", "moveToTop=true")
+                put("fields", "id,status")
+            })
+
+            assertEquals("moveToTop=true&fields=id,status", client.capturedQuery)
+        }
+
+        @Test
+        fun `leading question mark is stripped from query`() = runBlocking {
+            val client = CapturingClient()
+            tool(client).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("body", """{"buildType":{"id":"bt1"}}""")
+                put("query", "?moveToTop=true")
+            })
+
+            assertEquals("moveToTop=true", client.capturedQuery)
+        }
+
+        @Test
+        fun `explicit fields in query are not duplicated`() = runBlocking {
+            val client = CapturingClient()
+            tool(client).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("body", """{"buildType":{"id":"bt1"}}""")
+                put("query", "fields=id,number")
+                put("fields", "status")
+            })
+
+            assertEquals("fields=id,number", client.capturedQuery)
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Client invocation
     // -----------------------------------------------------------------------
@@ -521,6 +571,8 @@ class RestPostToolTest {
         private fun throwingClient(e: Exception) = object : RestApiClient {
             override suspend fun get(path: String, query: String): RestApiResponse = throw e
             override suspend fun post(path: String, query: String, body: String): RestApiResponse = throw e
+            override suspend fun put(path: String, query: String, body: String): RestApiResponse = throw e
+            override suspend fun delete(path: String, query: String): RestApiResponse = throw e
         }
 
         @Test

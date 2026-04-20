@@ -56,5 +56,13 @@ class RestApiGuideResourceTest {
         assertTrue(content.contains("personal"), "Should cover personal builds constraint")
         assertTrue(content.contains("buildQueue"), "Should mention buildQueue endpoint")
         assertTrue(content.contains("buildType"), "Should cover buildType in body")
+        assertTrue(content.contains("moveToTop=true"), "Should document query-based POST flags")
+    }
+
+    @Test
+    fun `content warns that permissions still apply`() {
+        val content = resource.read()
+        assertTrue(content.contains("permissions"), "Should mention permissions")
+        assertTrue(content.contains("still fail"), "Should warn that documented operations may still fail")
     }
 }

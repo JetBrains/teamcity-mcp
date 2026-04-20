@@ -36,6 +36,18 @@ class RestApiClientImpl(
         }
     }
 
+    override suspend fun put(path: String, query: String, body: String): RestApiResponse {
+        return withContext(Dispatchers.IO) {
+            executeRequest(HttpMethod.PUT, path, query, body)
+        }
+    }
+
+    override suspend fun delete(path: String, query: String): RestApiResponse {
+        return withContext(Dispatchers.IO) {
+            executeRequest(HttpMethod.DELETE, path, query)
+        }
+    }
+
     private suspend fun executeRequest(
         method: HttpMethod,
         path: String,

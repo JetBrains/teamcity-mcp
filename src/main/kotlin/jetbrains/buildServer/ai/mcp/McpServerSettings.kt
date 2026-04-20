@@ -1,9 +1,11 @@
 package jetbrains.buildServer.ai.mcp
 
+import jetbrains.buildServer.ai.mcp.resources.IntroduceYourselfResource
 import jetbrains.buildServer.ai.mcp.resources.rest.BuildFailureAnalysisGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
+import jetbrains.buildServer.ai.mcp.tools.IntroduceYourselfTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
@@ -34,6 +36,8 @@ class SettingsService {
 
     fun isBraveModeEnabled() = TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE)
 
+    fun isDevelopmentMode() = TeamCityProperties.getBoolean("teamcity.development.mode")
+
     /**
      * Returns the set of enabled tool names.
      * Empty property: no tools enabled.
@@ -56,6 +60,10 @@ class SettingsService {
                     add(PipelineDeleteTool.NAME)
                 }
             }
+
+            if (isDevelopmentMode()) {
+                add(IntroduceYourselfTool.NAME)
+            }
         }
         if (raw.isBlank()) return emptySet()
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -76,6 +84,9 @@ class SettingsService {
                     } else {
                         add(PipelineReadOnlyGuideResource.SETTINGS_NAME)
                     }
+                }
+                if (isDevelopmentMode()) {
+                    add(IntroduceYourselfResource.SETTINGS_NAME)
                 }
             }
         if (raw.isBlank()) return emptySet()

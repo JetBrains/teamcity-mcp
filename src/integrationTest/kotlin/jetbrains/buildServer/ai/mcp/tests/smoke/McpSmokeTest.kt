@@ -172,48 +172,6 @@ class McpSmokeTest : McpIntegrationTestBase() {
     }
 
     // -----------------------------------------------------------------------
-    // Tool-specific tests
-    // -----------------------------------------------------------------------
-
-    @Test
-    fun `tools list contains feedback tool`() {
-        mcpClient().use { client ->
-            client.withSession {
-                val tools = listTools()
-                val names = tools.map { it.name }
-                Assertions.assertTrue("feedback" in names, "tools/list must include 'feedback', got: $names")
-                println("  ✓ feedback tool found in: $names")
-            }
-        }
-    }
-
-    @Test
-    fun `feedback tool accepts feedback and returns acknowledgment`() {
-        mcpClient().use { client ->
-            client.withSession {
-                val result = callTool("feedback", mapOf("category" to "usability", "message" to "Great server!"))
-                Assertions.assertFalse(result.isError, "feedback tool should succeed, got: ${result.content}")
-                Assertions.assertTrue(
-                    result.content.any { it.text.contains("Feedback recorded") },
-                    "feedback tool should acknowledge, got: ${result.content}"
-                )
-                println("  ✓ feedback tool returned: ${result.content.firstOrNull()?.text}")
-            }
-        }
-    }
-
-    @Test
-    fun `feedback tool requires message parameter`() {
-        mcpClient().use { client ->
-            client.withSession {
-                val result = callTool("feedback", emptyMap())
-                Assertions.assertTrue(result.isError, "feedback tool without message should be an error")
-                println("  ✓ feedback tool without message → error: ${result.content.firstOrNull()?.text}")
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // Tool-specific tests: introduce_yourself
     // -----------------------------------------------------------------------
 
@@ -262,21 +220,6 @@ class McpSmokeTest : McpIntegrationTestBase() {
     // -----------------------------------------------------------------------
     // Tool-specific tests: edge cases
     // -----------------------------------------------------------------------
-
-    @Test
-    fun `feedback tool with category returns acknowledgment`() {
-        mcpClient().use { client ->
-            client.withSession {
-                val result = callTool("feedback", mapOf("category" to "feature_request", "message" to "Need more tools"))
-                Assertions.assertFalse(result.isError, "feedback with category should succeed")
-                Assertions.assertTrue(
-                    result.content.any { it.text.contains("Feedback recorded") },
-                    "feedback should acknowledge, got: ${result.content}"
-                )
-                println("  ✓ feedback with category: ${result.content.firstOrNull()?.text}")
-            }
-        }
-    }
 
     @Test
     fun `calling unknown tool returns error`() {

@@ -3,10 +3,12 @@ package jetbrains.buildServer.ai.mcp
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
-import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
-import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
+import jetbrains.buildServer.ai.mcp.resources.IntroduceYourselfResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
+import jetbrains.buildServer.ai.mcp.tools.IntroduceYourselfTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
 import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestDeleteTool
 import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
@@ -115,6 +117,38 @@ class SettingsServiceTest {
             setOf("/app/rest/buildQueue", "/app/rest/investigations"),
             settingsService.getRestPostAllowedPaths()
         )
+    }
+
+    @Test
+    fun `default tools include introduce_yourself only when development mode is on`() {
+        mockkStatic(TeamCityProperties::class)
+        every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
+        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
+        every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns false
+
+        val prod = settingsService.getEnabledToolNames()
+        assertFalse(prod.contains(IntroduceYourselfTool.NAME))
+
+        every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns true
+        val dev = settingsService.getEnabledToolNames()
+        assertTrue(dev.contains(IntroduceYourselfTool.NAME))
+    }
+
+    @Test
+    fun `default resources include introduce_yourself only when development mode is on`() {
+        mockkStatic(TeamCityProperties::class)
+        every { TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED) } returns null
+        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
+        every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns false
+
+        val prod = settingsService.getEnabledResourceNames()
+        assertFalse(prod.contains(IntroduceYourselfResource.SETTINGS_NAME))
+
+        every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns true
+        val dev = settingsService.getEnabledResourceNames()
+        assertTrue(dev.contains(IntroduceYourselfResource.SETTINGS_NAME))
     }
 
     @Test

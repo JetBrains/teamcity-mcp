@@ -466,9 +466,14 @@ class RestApiGuideTest : McpIntegrationTestBase() {
                     "path" to "/app/rest/vcsRootInstances",
                     "query" to "locator=count:2&fields=vcs-root-instance(id,name)"
                 ))
-                val meta = extractMeta(result)
-                assertEquals(404, meta["statusCode"]?.jsonPrimitive?.intOrNull,
-                    "vcsRootInstances (camelCase) should return 404")
+                // Since commit 8c4ce8a, HTTP >= 400 from the REST client surfaces as
+                // McpToolResult.error() with a plain-text body, not as a JSON envelope
+                // with meta.statusCode.
+                assertTrue(result.isError,
+                    "vcsRootInstances (camelCase) should surface as an error result")
+                val text = result.content.first().text
+                assertTrue(text.contains("404"),
+                    "error message should mention 404, got: $text")
                 println("  ✓ /vcsRootInstances (camelCase) returns 404 as expected")
             }
         }

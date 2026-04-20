@@ -227,8 +227,8 @@ class McpProtocolComplianceTest : McpIntegrationTestBase() {
                 assertFalse(tools.isEmpty(), "tools/list must return at least one tool")
 
                 // 2. Call a tool
-                val result = callTool("feedback", mapOf("category" to "usability", "message" to "integration test"))
-                assertFalse(result.isError, "feedback tool must succeed")
+                val result = callTool("introduce_yourself", mapOf("name" to "ComplianceTest"))
+                assertFalse(result.isError, "introduce_yourself tool must succeed")
 
                 // 3. Send a notification
                 val notifStatus = sendNotification("notifications/initialized")

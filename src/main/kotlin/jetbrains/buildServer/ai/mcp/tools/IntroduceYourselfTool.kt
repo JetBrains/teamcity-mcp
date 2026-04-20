@@ -10,7 +10,11 @@ import org.springframework.stereotype.Component
 @Component
 class IntroduceYourselfTool : McpTool {
 
-    override val name = "introduce_yourself"
+    companion object {
+        internal const val NAME = "introduce_yourself"
+    }
+
+    override val name = NAME
 
     override val description = "Let the server know who you are"
 

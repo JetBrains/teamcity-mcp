@@ -2,10 +2,16 @@
 # Run MCP integration and e2e tests against a TeamCity server.
 #
 # Mode 1 — Against an already-running server:
-#   TC_SERVER_URL=http://localhost:8111 TC_HOME=teamcity-home TC_SERVER_TOKEN=eyJ... ./run_integration_tests.sh
+#   TC_SERVER_URL=http://localhost:8111 TC_HOME=teamcity-home TC_SERVER_TOKEN=eyJ... \
+#   TC_DATA_PATH=/path/to/.BuildServer ./run_integration_tests.sh
+#
+#   TC_DATA_PATH is optional; only needed for tests that toggle TC internal
+#   properties at runtime (e.g. BraveModeE2eTest). Skipped if unset.
 #
 # Mode 2 — Full lifecycle (setup server from dist, run tests, teardown):
 #   TC_DIST=~/Downloads/TeamCity-222175.tar.gz ./run_integration_tests.sh
+#
+#   Mode 2 exports TC_DATA_PATH automatically (points at $TC_HOME/.BuildServer).
 #
 # In mode 2, the plugin is built first, a fresh TC server is started,
 # integration and e2e tests run, and the server is stopped on exit.
@@ -41,7 +47,7 @@ if [ -n "${TC_DIST:-}" ]; then
     # Source the generated env file
     # shellcheck source=/dev/null
     source .test-server.env
-    export TC_SERVER_URL TC_SERVER_TOKEN TC_SERVER_RESTRICTED_TOKEN TC_HOME
+    export TC_SERVER_URL TC_SERVER_TOKEN TC_SERVER_RESTRICTED_TOKEN TC_HOME TC_DATA_PATH
 
     # Ensure server is stopped on exit
     trap 'scripts/stop-test-server.sh' EXIT
@@ -61,6 +67,10 @@ GRADLE_ARGS=(
 
 if [ -n "${TC_SERVER_RESTRICTED_TOKEN:-}" ]; then
     GRADLE_ARGS+=(-DTC_SERVER_RESTRICTED_TOKEN="$TC_SERVER_RESTRICTED_TOKEN")
+fi
+
+if [ -n "${TC_DATA_PATH:-}" ]; then
+    GRADLE_ARGS+=(-DTC_DATA_PATH="$TC_DATA_PATH")
 fi
 
 EXIT_CODE=0

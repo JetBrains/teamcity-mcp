@@ -38,6 +38,7 @@ Key fields of project to examine:
 - **`parentProjectId`** — The ID of a TeamCity project that owns this project. Returns '_Root' if this is project resides on the topmost level.
 - **`vcsRoots`** — The list of VCS roots owned by this project.
 - **`buildTypes`** — The list of build configurations (build types) owned directly by this project - does not include configurations owned by subprojects.
+- **`pipelines`** — The list of pipelines owned directly by this project - does not include pipelines owned by subprojects.
 
 Important for displaying/organizing output
 - **`archived`** — Returns **true** if the project is archived; otherwise, **false**.

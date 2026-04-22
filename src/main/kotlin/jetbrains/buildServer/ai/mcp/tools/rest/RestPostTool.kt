@@ -3,7 +3,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
 import jetbrains.buildServer.ai.mcp.SettingsService
-import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import kotlinx.serialization.json.JsonObject
@@ -18,7 +18,9 @@ import org.springframework.stereotype.Component
 class RestPostTool(
     @Autowired(required = false) private val restApiClient: RestApiClient? = null,
     private val settingsService: SettingsService
-) : McpTool {
+) : BraveModeAwareMcpTool {
+
+    override val brave = false
 
     companion object {
         private val LOGGER = Logger.getInstance(RestPostTool::class.java.name)

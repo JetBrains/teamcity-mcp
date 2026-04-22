@@ -4,7 +4,7 @@ import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
 import jetbrains.buildServer.ai.mcp.MCP_REST_POST_ALLOWED_PATHS
 import jetbrains.buildServer.ai.mcp.SettingsService
-import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import kotlinx.serialization.json.JsonObject
@@ -30,7 +30,9 @@ import org.springframework.stereotype.Component
 class RestPostBraveTool(
     @Autowired(required = false) private val restApiClient: RestApiClient? = null,
     private val settingsService: SettingsService
-) : McpTool {
+) : BraveModeAwareMcpTool {
+
+    override val brave = true
 
     companion object {
         private val LOGGER = Logger.getInstance(RestPostBraveTool::class.java.name)

@@ -11,6 +11,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import jetbrains.buildServer.ai.mcp.resources.BraveModeAwareMcpResource
 import jetbrains.buildServer.ai.mcp.resources.McpResource
+import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
@@ -94,7 +95,10 @@ class McpServerConfigurator(
 
     internal fun getEnabledTools(): List<McpTool> {
         val enabledSet = settingsService.getEnabledToolNames()
-        return allTools.filter { it.name in enabledSet }
+        val braveEnabled = settingsService.isBraveModeEnabled()
+        return allTools
+            .filter { it.name in enabledSet }
+            .filter { it !is BraveModeAwareMcpTool || it.brave == braveEnabled }
     }
 
     internal fun getEnabledResources(): List<McpResource> {

@@ -5,6 +5,7 @@ import io.mockk.mockk
 import io.mockk.unmockkAll
 import jetbrains.buildServer.ai.mcp.resources.BraveModeAwareMcpResource
 import jetbrains.buildServer.ai.mcp.resources.McpResource
+import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
 import jetbrains.buildServer.ai.mcp.tools.McpTool
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
@@ -276,6 +277,81 @@ class McpServerConfiguratorTest {
             )
             assertTrue(configurator.getEnabledResources().isEmpty())
         }
+
+        @Test
+        fun `non-BraveModeAware tools are always enabled regardless of brave mode`() {
+            every { settingsService.getEnabledToolNames() } returns setOf("plain")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            every { settingsService.isBraveModeEnabled() } returns false
+
+            val configurator = configurator(tools = listOf(testTool("plain")))
+            assertEquals(1, configurator.getEnabledTools().size)
+
+            every { settingsService.isBraveModeEnabled() } returns true
+            assertEquals(1, configurator.getEnabledTools().size)
+        }
+
+        @Test
+        fun `BraveModeAware tool with brave=true is included only when brave mode is on`() {
+            every { settingsService.getEnabledToolNames() } returns setOf("brave_only")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            every { settingsService.isBraveModeEnabled() } returns false
+
+            val configurator = configurator(
+                tools = listOf(testBraveTool("brave_only", brave = true))
+            )
+            assertTrue(configurator.getEnabledTools().isEmpty())
+
+            every { settingsService.isBraveModeEnabled() } returns true
+            assertEquals(1, configurator.getEnabledTools().size)
+        }
+
+        @Test
+        fun `BraveModeAware tool with brave=false is included only when brave mode is off`() {
+            every { settingsService.getEnabledToolNames() } returns setOf("safe_only")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            every { settingsService.isBraveModeEnabled() } returns true
+
+            val configurator = configurator(
+                tools = listOf(testBraveTool("safe_only", brave = false))
+            )
+            assertTrue(configurator.getEnabledTools().isEmpty())
+
+            every { settingsService.isBraveModeEnabled() } returns false
+            assertEquals(1, configurator.getEnabledTools().size)
+        }
+
+        @Test
+        fun `paired brave+safe tool variants yield exactly one tool per mode`() {
+            val safe = testBraveTool("teamcity_rest_post", brave = false)
+            val brave = testBraveTool("teamcity_rest_post", brave = true)
+            every { settingsService.getEnabledToolNames() } returns setOf("teamcity_rest_post")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+
+            val configurator = configurator(tools = listOf(safe, brave))
+
+            every { settingsService.isBraveModeEnabled() } returns false
+            val offEnabled = configurator.getEnabledTools()
+            assertEquals(1, offEnabled.size)
+            assertEquals(false, (offEnabled.single() as BraveModeAwareMcpTool).brave)
+
+            every { settingsService.isBraveModeEnabled() } returns true
+            val onEnabled = configurator.getEnabledTools()
+            assertEquals(1, onEnabled.size)
+            assertEquals(true, (onEnabled.single() as BraveModeAwareMcpTool).brave)
+        }
+
+        @Test
+        fun `name filter runs before brave filter — disabled tool name never appears`() {
+            every { settingsService.getEnabledToolNames() } returns emptySet()
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            every { settingsService.isBraveModeEnabled() } returns true
+
+            val configurator = configurator(
+                tools = listOf(testBraveTool("teamcity_rest_post", brave = true))
+            )
+            assertTrue(configurator.getEnabledTools().isEmpty())
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -302,6 +378,20 @@ class McpServerConfiguratorTest {
         override val description = "Test resource $resName"
         override val mimeType = "text/plain"
         override fun read(): String = "Content of $resName"
+    }
+
+    private fun testBraveTool(toolName: String, brave: Boolean) = object : BraveModeAwareMcpTool {
+        override val brave = brave
+        override val name = toolName
+        override val description = "Test BraveModeAware tool $toolName (brave=$brave)"
+        override val inputSchema = McpToolSchema(
+            properties = buildJsonObject {
+                putJsonObject("arg") { put("type", "string") }
+            }
+        )
+        override suspend fun execute(arguments: JsonObject?): McpToolResult {
+            return McpToolResult.success("ok")
+        }
     }
 
     private fun testBraveResource(resName: String, brave: Boolean) = object : BraveModeAwareMcpResource {

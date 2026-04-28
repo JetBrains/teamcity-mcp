@@ -40,5 +40,6 @@ class FindProjectsRelatedToRepositoryGuideResourceTest {
         val content = resource.read()
         assertFalse(content.isBlank(), "Content should not be blank")
         assertTrue(content.contains("/app/rest/projects"))
+        assertTrue(content.contains("/app/rest/vcs-roots?locator"))
     }
 }

@@ -39,7 +39,7 @@ class FindProjectsRelatedToRepositoryGuideResourceTest {
     fun `read returns get find projects related to repository content`() {
         val content = resource.read()
         assertFalse(content.isBlank(), "Content should not be blank")
-        assertTrue(content.contains("/app/rest/projects"))
-        assertTrue(content.contains("/app/rest/vcs-roots?locator"))
+        assertTrue(content.contains("/app/rest/vcs-roots"), "Content should include VCS roots API")
+        assertTrue(content.contains("/app/rest/buildTypes"), "Content should include build configurations API")
     }
 }

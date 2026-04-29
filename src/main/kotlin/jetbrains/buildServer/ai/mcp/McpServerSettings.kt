@@ -1,7 +1,7 @@
 package jetbrains.buildServer.ai.mcp
 
 import jetbrains.buildServer.ai.mcp.resources.rest.BuildFailureAnalysisGuideResource
-import jetbrains.buildServer.ai.mcp.resources.rest.FindProjectsRelatedToRepositoryGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.FindBuildConfigurationsByRepositoryUrlGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineBraveGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.PipelineReadOnlyGuideResource
 import jetbrains.buildServer.ai.mcp.resources.rest.RestApiGuideResource
@@ -64,7 +64,7 @@ class SettingsService {
             ?: return buildSet {
                 add(RestApiGuideResource.SETTINGS_NAME)
                 add(BuildFailureAnalysisGuideResource.SETTINGS_NAME)
-                add(FindProjectsRelatedToRepositoryGuideResource.SETTINGS_NAME)
+                add(FindBuildConfigurationsByRepositoryUrlGuideResource.SETTINGS_NAME)
                 if (isPipelineEnabled()) {
                     if (isBraveModeEnabled()) {
                         add(PipelineBraveGuideResource.SETTINGS_NAME)

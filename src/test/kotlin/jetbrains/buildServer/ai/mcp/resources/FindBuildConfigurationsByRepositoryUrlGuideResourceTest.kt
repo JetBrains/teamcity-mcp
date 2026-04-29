@@ -1,23 +1,23 @@
 package jetbrains.buildServer.ai.mcp.resources
 
-import jetbrains.buildServer.ai.mcp.resources.rest.FindProjectsRelatedToRepositoryGuideResource
+import jetbrains.buildServer.ai.mcp.resources.rest.FindBuildConfigurationsByRepositoryUrlGuideResource
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class FindProjectsRelatedToRepositoryGuideResourceTest {
+class FindBuildConfigurationsByRepositoryUrlGuideResourceTest {
 
-    private val resource = FindProjectsRelatedToRepositoryGuideResource()
+    private val resource = FindBuildConfigurationsByRepositoryUrlGuideResource()
 
     @Test
-    fun `settingsName is find_projects_related_to_repository_guide`() {
-        assertEquals("find_projects_related_to_repository_guide", resource.shortName)
+    fun `settingsName is find_build_configurations_by_repository_url_guide`() {
+        assertEquals("find_build_configurations_by_repository_url_guide", resource.shortName)
     }
 
     @Test
-    fun `uri is teamcity info projects-related-to-repository`() {
-        assertEquals("teamcity://guides/projects-related-to-repository", resource.uri)
+    fun `uri is teamcity info build_configurations_by_repository_url`() {
+        assertEquals("teamcity://guides/build_configurations_by_repository_url", resource.uri)
     }
 
     @Test
@@ -39,7 +39,7 @@ class FindProjectsRelatedToRepositoryGuideResourceTest {
     fun `read returns get find projects related to repository content`() {
         val content = resource.read()
         assertFalse(content.isBlank(), "Content should not be blank")
-        assertTrue(content.contains("/app/rest/vcs-roots"), "Content should include VCS roots API")
         assertTrue(content.contains("/app/rest/buildTypes"), "Content should include build configurations API")
+        assertTrue(content.contains("/app/rest/vcs-roots"), "Content should mention VCS roots API")
     }
 }

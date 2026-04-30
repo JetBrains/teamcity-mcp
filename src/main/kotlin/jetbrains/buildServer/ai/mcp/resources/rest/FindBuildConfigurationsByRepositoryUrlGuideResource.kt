@@ -19,7 +19,7 @@ Assumes familiarity with the tools — see the **REST API Guide** for tool param
 
 ```
 1. Find build configurations that build from the matching VCS root and projects that own them
-2. Display results in a table
+2. Display results in a table (skip if working autonomously)
 ```
 
 ---
@@ -51,6 +51,8 @@ query: locator=vcsRoot:(property:(name:port,value:host:port,matchType:contains))
 ```
 
 # Step 2: Display results in a table
+
+**Skip this step if working autonomously** (e.g. gathering context as part of a larger task). Only perform this step when a user has explicitly asked to find build configurations.
 
 When presenting results, display the following columns:
 - Build configuration ID

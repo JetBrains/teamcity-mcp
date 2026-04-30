@@ -32,7 +32,7 @@ The `matchType:contains` locator will match both `https://host/org/repo.git` and
 
 ```
 path: /app/rest/buildTypes
-query: locator=vcsRoot:(property:(name:url,value:org/repo,matchType:contains)),count:100&fields=buildType(id,name,project(id,name))
+query: locator=vcsRoot:(property:(name:url,value:org/repo,matchType:contains)),count:100&fields=nextHref,buildType(id,name,project(id,name))
 ```
 
 If the repository is hosted on Azure DevOps, the URL will look like this: https://dev.azure.com/{organization}/{project}/_git/{repository}.
@@ -40,14 +40,14 @@ Use the following locator:
 
 ```
 path: /app/rest/buildTypes
-query: locator=vcsRoot:(property:(name:url,value:{organization}/{project}/_git/{repository},matchType:contains)),count:100&fields=buildType(id,name,project(id,name))
+query: locator=vcsRoot:(property:(name:url,value:{organization}/{project}/_git/{repository},matchType:contains)),count:100&fields=nextHref,buildType(id,name,project(id,name))
 ```
 
 If the repository uses Perforce as the version control system, use the following locator:
 
 ```
 path: /app/rest/buildTypes
-query: locator=vcsRoot:(property:(name:port,value:host:port,matchType:contains)),count:100&fields=buildType(id,name,project(id,name))
+query: locator=vcsRoot:(property:(name:port,value:host:port,matchType:contains)),count:100&fields=nextHref,buildType(id,name,project(id,name))
 ```
 
 # Step 2: Display results in a table

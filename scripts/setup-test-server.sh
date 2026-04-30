@@ -4,9 +4,11 @@
 #
 # Required environment:
 #   TC_DIST        — path to TeamCity-*.tar.gz distribution archive
-#   PLUGIN_ZIP     — path to the built mcp.zip plugin file
 #
 # Optional environment:
+#   PLUGIN_ZIP     — path to the built mcp.zip plugin file; if omitted, the script looks
+#                    for an existing mcp.zip already bundled in the TC distribution at
+#                    $TC_HOME/webapps/ROOT/WEB-INF/plugins/mcp.zip and fails if absent
 #   TC_HOME        — where to extract TC (default: ./teamcity-home)
 #   JAVA_HOME      — JDK to use (must be set or already on PATH)
 #   TC_PORT        — server port (default: 8211, to avoid conflicts with a local TC on 8111)
@@ -23,7 +25,6 @@
 set -euo pipefail
 
 : "${TC_DIST:?TC_DIST must be set to the path of TeamCity-*.tar.gz}"
-: "${PLUGIN_ZIP:?PLUGIN_ZIP must be set to the path of mcp.zip}"
 
 # Resolve glob patterns (e.g. temp/TeamCity-*.tar.gz)
 # shellcheck disable=SC2086
@@ -86,8 +87,21 @@ sed -i.bak -e "s/port=\"8111\"/port=\"${TC_PORT}\"/g" \
 rm -f "$TC_HOME/conf/server.xml.bak"
 
 echo "=== Installing MCP plugin ==="
-mkdir -p "$TC_HOME/webapps/ROOT/WEB-INF/plugins"
-cp "$PLUGIN_ZIP" "$TC_HOME/webapps/ROOT/WEB-INF/plugins/"
+PLUGINS_DIR="$TC_HOME/webapps/ROOT/WEB-INF/plugins"
+mkdir -p "$PLUGINS_DIR"
+if [ -n "${PLUGIN_ZIP:-}" ]; then
+    echo "PLUGIN_ZIP provided — copying $PLUGIN_ZIP to $PLUGINS_DIR/"
+    cp "$PLUGIN_ZIP" "$PLUGINS_DIR/"
+    echo "MCP plugin installed from $PLUGIN_ZIP"
+else
+    echo "PLUGIN_ZIP not set — checking for bundled mcp.zip in $PLUGINS_DIR/"
+    if [ -f "$PLUGINS_DIR/mcp.zip" ]; then
+        echo "Found bundled mcp.zip in $PLUGINS_DIR/ — using it as-is"
+    else
+        echo "ERROR: mcp.zip was neither provided via PLUGIN_ZIP nor found in $PLUGINS_DIR/"
+        exit 1
+    fi
+fi
 
 # ── Configure data directory ─────────────────────────────────────────────────
 

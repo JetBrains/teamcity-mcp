@@ -31,8 +31,10 @@ and resources safely.
 ## Important Tool Notes
 
 - `teamcity_rest_get` should use `fields` and paginated locators.
-- `teamcity_rest_post` may be limited by server allowlists and enforces
-  personal builds for `/app/rest/buildQueue`.
+- `teamcity_rest_post` may be limited by server allowlists. In safe mode,
+  `/app/rest/buildQueue` requests are forced to personal builds. In brave mode,
+  the request body is passed through unchanged, so include `"personal": true`
+  yourself when you need an isolated build.
 - `teamcity_rest_put` and `teamcity_rest_delete` may only be available in brave
   mode.
 - `teamcity_pipeline_post` and `teamcity_pipeline_delete` may require pipeline

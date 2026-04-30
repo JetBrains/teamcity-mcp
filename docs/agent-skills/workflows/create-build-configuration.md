@@ -28,6 +28,8 @@ personal build.
 7. If write tools are available and the user intent is clear, create or update
    the configuration through TeamCity MCP.
 8. Queue a personal build with `teamcity_rest_post` to `/app/rest/buildQueue`.
+   In safe mode this is enforced by the tool; in brave mode include
+   `"personal": true` in the request body.
 9. Monitor the build with `teamcity_rest_get`.
 10. If the build fails, switch to `debug-failed-build`.
 

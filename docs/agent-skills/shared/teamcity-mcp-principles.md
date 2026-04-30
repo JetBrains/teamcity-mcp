@@ -26,7 +26,10 @@ TeamCity MCP can expose different tools depending on server properties.
 
 - Safe mode commonly includes read access, build log access, and safe build
   queueing through `teamcity_rest_post`.
-- `teamcity_rest_post` enforces personal builds for `/app/rest/buildQueue`.
+- In safe mode, `teamcity_rest_post` forces `/app/rest/buildQueue` requests to
+  personal builds. In brave mode, the request body is passed through unchanged,
+  so callers must include `"personal": true` themselves when they need an
+  isolated build.
 - Brave mode can expose broader REST write tools such as PUT and DELETE.
 - Pipeline write tools may require pipeline support and server-side allowlists.
 

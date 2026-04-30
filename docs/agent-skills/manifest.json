@@ -1,0 +1,71 @@
+{
+  "name": "teamcity-mcp-agent-skills",
+  "version": "0.1.0",
+  "description": "Canonical TeamCity MCP workflows for AI agents.",
+  "workflows": [
+    {
+      "id": "use-teamcity-mcp",
+      "title": "Use TeamCity MCP",
+      "path": "workflows/use-teamcity-mcp.md",
+      "description": "Install, connect, authenticate, discover, and safely use the TeamCity MCP server."
+    },
+    {
+      "id": "create-build-configuration",
+      "title": "Create Build Configuration",
+      "path": "workflows/create-build-configuration.md",
+      "description": "Create or update a TeamCity build configuration for the current project."
+    },
+    {
+      "id": "create-pipeline",
+      "title": "Create Pipeline",
+      "path": "workflows/create-pipeline.md",
+      "description": "Create TeamCity Pipelines or build chains for multi-stage CI flows."
+    },
+    {
+      "id": "first-green-build",
+      "title": "First Green Build",
+      "path": "workflows/first-green-build.md",
+      "description": "Create or update TeamCity CI for a project and iterate until the first successful build."
+    },
+    {
+      "id": "debug-failed-build",
+      "title": "Debug Failed Build",
+      "path": "workflows/debug-failed-build.md",
+      "description": "Diagnose and fix an existing failed TeamCity build."
+    }
+  ],
+  "shared": [
+    {
+      "id": "teamcity-mcp-principles",
+      "path": "shared/teamcity-mcp-principles.md"
+    },
+    {
+      "id": "token-safety",
+      "path": "shared/token-safety.md"
+    },
+    {
+      "id": "project-inspection",
+      "path": "shared/project-inspection.md"
+    },
+    {
+      "id": "build-step-selection",
+      "path": "shared/build-step-selection.md"
+    },
+    {
+      "id": "build-log-debugging",
+      "path": "shared/build-log-debugging.md"
+    }
+  ],
+  "adapters": [
+    {
+      "id": "generic-agents",
+      "path": "adapters/generic/AGENTS.md",
+      "description": "Generic cross-agent instructions for user repositories."
+    },
+    {
+      "id": "codex-teamcity-first-green-build",
+      "path": "adapters/codex/skills/teamcity-first-green-build/SKILL.md",
+      "description": "Codex-specific TeamCity first green build skill packaging and runtime guardrails."
+    }
+  ]
+}

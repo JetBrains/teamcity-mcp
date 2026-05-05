@@ -30,14 +30,26 @@ Before the first TeamCity write request, resolve the target in one compact
 exchange when it is not already known:
 
 - TeamCity server URL.
-- TeamCity token only if MCP for that server is not already working and no
-  verified client-side MCP OAuth or interactive auth path is available.
-- Target parent project: `_Root` or a named existing project.
-- Object strategy: create new or reuse existing.
-- Project location: current repository root or a specific subdirectory.
+- Authentication path, discovered by Codex: first check for an exact target MCP
+  attachment, then a verified client-side MCP OAuth or interactive auth path.
+  Ask the user for a TeamCity token only if those are unavailable.
+- Target parent project ID. This is required for TeamCity writes; `_Root` is a
+  valid ID. If the user gives only a project name, resolve it to an ID and
+  confirm the exact ID before writing.
+- TeamCity object create/update strategy is discovered by Codex from the server
+  after parent project ID is known. Do not ask the user whether to create new or
+  reuse existing before checking existing projects, pipelines, build types, VCS
+  roots, and repo/YAML matches under the target parent.
+- TeamCity object location follows from the required parent project ID and
+  server-side discovery. Do not ask for "project location: repo root or
+  subdirectory" during initial intake.
+- Repository build root is discovered from the local checkout. Ask about a
+  repository subdirectory only if local inspection shows multiple plausible
+  build roots or the user has already hinted at a nested project.
 
-If the repository is private and TeamCity needs VCS access, treat that as a
-separate prerequisite from the TeamCity token.
+Discover repository visibility and TeamCity VCS access before asking the user
+about them. If the repository appears private or TeamCity cannot access it,
+treat VCS authentication as a separate prerequisite from the TeamCity token.
 
 Prefer TeamCity authentication strategies in this order:
 
@@ -131,6 +143,25 @@ Allowed TeamCity operations in this skill are:
 
 The MCP tools above are still MCP tools even if their names contain `rest`.
 
+Use MCP first to clarify server attachment, permissions, parent project,
+repository state, schema, and the intended TeamCity object. After MCP research
+has made the target state clear, prefer official first-class `teamcity` CLI
+commands for supported execution steps. If the first-class CLI command surface
+is not enough for a required supported operation, use the TeamCity MCP tools
+rather than raw REST or shell wrappers.
+
+To install the official TeamCity CLI on macOS with Homebrew, use:
+
+```bash
+brew install jetbrains/utils/teamcity
+```
+
+To install the TeamCity CLI skill, use:
+
+```bash
+teamcity skill install
+```
+
 Do not use:
 
 - raw REST through shell commands
@@ -139,11 +170,11 @@ Do not use:
 - `teamcity api` as the normal execution path
 - historical approved command prefixes as permission to bypass MCP
 
-If MCP does not expose the required operation:
+If the official first-class `teamcity` CLI does not expose the required
+operation after MCP research has made the target state clear:
 
-1. Check whether an official first-class `teamcity` CLI command covers it and
-   whether the task is already fully determined by MCP research.
-2. If yes, use the official CLI instead of raw REST.
+1. Check whether TeamCity MCP exposes the operation.
+2. If yes, use MCP instead of raw REST.
 3. If no, stop and report the missing supported capability.
 
 ## Repository And Project Targeting
@@ -153,9 +184,20 @@ Treat the local checkout as the primary source of repository truth.
 - Prefer the current Git remote over stale values from previous sessions.
 - If the local repository URL conflicts with prior TeamCity session notes, stop
   and resolve the conflict before creating anything.
-- If the repository is a monorepo or the user hinted at a nested project, ask
-  whether CI should run from the current directory or a specific subdirectory
-  before generating TeamCity YAML or pipeline configuration.
+- Require a target parent project ID before TeamCity writes. If only a project
+  name is known, resolve and confirm the exact ID first.
+- Derive TeamCity project or pipeline placement from the target parent project
+  ID and server-side discovery.
+- Discover whether to update an existing TeamCity object or create a new one by
+  inspecting existing objects and VCS bindings under the parent project. Ask the
+  user only if multiple plausible matches exist or the operation would overwrite
+  a user-owned object ambiguously.
+- Derive the repository build root from the local checkout. If the repository is
+  a monorepo or the user hinted at a nested project, ask which repository
+  subdirectory TeamCity should build from before generating TeamCity YAML or
+  pipeline configuration.
+- Check repository visibility and existing TeamCity VCS/provider access before
+  asking the user whether the repository is public or private.
 - Inspect checked-in TeamCity YAML such as `.teamcity.yml` and preserve its job
   topology unless the user explicitly asks for a reduced first pass.
 
@@ -250,15 +292,21 @@ build, then problem occurrences or focused log lines.
 
 ## Reporting Requirements
 
-Always report:
+Report only facts that were actually checked. Do not write placeholder lines
+such as "TeamCity object created/updated: none" or "no failed or successful
+build yet" before checking the TeamCity server.
 
-1. What TeamCity object was created or updated.
-2. Which TeamCity server and parent project were used.
+After server-side discovery or execution, report:
+
+1. What existing TeamCity object was found, created, updated, or selected.
+2. Which TeamCity server and parent project ID were used.
 3. Which repository URL and project root were used.
 4. Which MCP actions were important.
 5. Which exact MCP or CLI limitation blocked progress, if any.
-6. The first failed build ID and root cause, if any.
-7. The first successful build ID, if achieved.
+6. The first failed build ID and root cause, only after a server-side build
+   lookup or queued build produced that evidence.
+7. The first successful build ID, only after a server-side build lookup or
+   queued build produced that evidence.
 8. Any manual prerequisite the user still needs to complete.
 
 Keep the report short and evidence-based so another engineer can review the

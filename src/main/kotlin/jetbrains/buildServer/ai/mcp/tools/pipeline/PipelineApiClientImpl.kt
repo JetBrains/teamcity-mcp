@@ -61,7 +61,9 @@ class PipelineApiClientImpl(
             request.setMethod(method.name)
             request.setHeader("Accept", "application/json")
             request.setAttribute("INTERNAL_REQUEST", true)
+
             SessionUser.setUser(request, user)
+            executionContext.applyRequestData(request)
 
             if (body != null) {
                 request.setInputStream(ByteArrayInputStream(body.toByteArray(Charsets.UTF_8)))

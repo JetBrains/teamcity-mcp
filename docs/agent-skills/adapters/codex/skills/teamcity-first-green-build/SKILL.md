@@ -72,6 +72,31 @@ There is a critical difference between:
 Before the first MCP request to TeamCity, prove that callable TeamCity MCP
 access in this session corresponds to the exact target server.
 
+Run a compact attachment diagnostic before stopping on this gate:
+
+- Check whether the target appears in `codex mcp list`.
+- Check whether the current session exposes TeamCity MCP tools through the
+  available tool discovery surface.
+- Check whether MCP resources/templates for the current session include the
+  target TeamCity server.
+- Check whether the configured bearer token environment variable is visible to
+  the process doing the attachment. In Codex Desktop, the GUI app runtime may
+  not inherit variables that are visible in an interactive shell, and a shell
+  spawned by Codex may also lack variables that were added after the app
+  started.
+
+When the target server is present in config but no callable TeamCity tools or
+resources are attached, do not just say "restart Codex." Report the diagnosis in
+plain language:
+
+- The configured MCP server name and URL that were found.
+- Whether the expected token environment variable was visible or missing.
+- That the missing piece is the current session's callable MCP attachment, not
+  necessarily the local MCP config.
+- The likely next action, such as starting Codex from an environment where the
+  token variable is set, reconnecting the MCP server, or restarting the Desktop
+  app after setting the token.
+
 Acceptable evidence:
 
 - The current session exposes TeamCity MCP tool calls that clearly correspond
@@ -249,6 +274,87 @@ If a build fails with messages like:
 then the likely blocker is VCS authentication, not the build script itself.
 Verify whether the repository is private and whether TeamCity has the correct
 GitHub App, OAuth, SSH key, or other VCS connection.
+
+#### Remote Run Without Private Repo Access
+
+For private repositories where TeamCity cannot collect changes, try a
+TeamCity remote run / patch-based personal build before declaring the setup
+blocked. This is a deferred VCS authorization fallback, not a replacement for a
+working VCS root: TeamCity personal builds use current VCS repository sources
+plus the uploaded local changes, so checkout/change collection may still fail
+if the server or agent cannot read the base repository at all.
+
+Prefer the official TeamCity CLI remote run surface when available:
+
+```bash
+teamcity run start <BUILD_TYPE_ID> --local-changes --no-push
+teamcity run start <BUILD_TYPE_ID> --local-changes changes.patch --no-push
+git diff --binary | teamcity run start <BUILD_TYPE_ID> --local-changes - --no-push
+```
+
+Use direct patch upload only as this specific documented exception to the
+general no-raw-REST rule, and only with tokens supplied through environment
+variables or MCP configuration:
+
+```bash
+git diff --binary > /tmp/tc-remote-run.patch
+
+CHANGE_ID=$(curl -sS -X POST \
+  -H "Authorization: Bearer $TEAMCITY_TOKEN" \
+  -H "Content-Type: text/text" \
+  --data-binary @/tmp/tc-remote-run.patch \
+  "$TEAMCITY_URL/uploadDiffChanges.html?description=IJ%20IDEA%20Remote%20Run&commitType=0")
+
+curl -sS -X POST \
+  -H "Authorization: Bearer $TEAMCITY_TOKEN" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  "$TEAMCITY_URL/app/rest/buildQueue" \
+  -d "{\"buildType\":{\"id\":\"$BUILD_TYPE_ID\"},\"lastChanges\":{\"change\":[{\"id\":\"$CHANGE_ID\",\"personal\":true}]}}"
+```
+
+Direct patch upload is best for Git-generated unified diffs. If
+`git diff --binary` produces a patch TeamCity rejects, retry with a plain
+unified diff for text-only changes or report the binary patch as unsupported by
+this fallback.
+
+If patch-based remote run fails with the same VCS access error, try to create a
+usable authenticated VCS root through the TeamCity CLI before sending the user
+to the UI. Discover inherited provider connections first:
+
+```bash
+teamcity project connection list --project <PROJECT_ID> --json
+teamcity project connection list --project _Root --json
+teamcity project vcs create --project <PROJECT_ID> \
+  --url <REPOSITORY_URL> \
+  --auth token \
+  --connection-id <GITHUB_OR_OTHER_PROVIDER_CONNECTION_ID> \
+  --branch refs/heads/<DEFAULT_BRANCH> \
+  --branch-spec '+:refs/heads/*'
+```
+
+For PAT or SSH credentials supplied by the user, prefer the corresponding
+first-class CLI forms instead of storing secrets in project parameters:
+
+```bash
+teamcity project vcs create --project <PROJECT_ID> \
+  --url <REPOSITORY_URL> \
+  --auth password \
+  --username oauth2 \
+  --stdin
+
+teamcity project vcs create --project <PROJECT_ID> \
+  --url git@github.com:<OWNER>/<REPO>.git \
+  --auth ssh-key \
+  --ssh-key-name <UPLOADED_KEY_NAME>
+```
+
+If CLI authentication cannot produce a VCS root that passes both
+`teamcity project vcs test <VCS_ROOT_ID>` and a real build change-collection
+attempt, tell the user to authorize the repository in the TeamCity UI. Provide
+the exact project or VCS root URL when known, for example:
+`$TEAMCITY_URL/admin/editProject.html?projectId=<PROJECT_ID>` or the
+`webUrl` returned for the failing VCS root/build configuration.
 
 ### Agent Availability
 

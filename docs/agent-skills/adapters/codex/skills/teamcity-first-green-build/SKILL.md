@@ -261,6 +261,18 @@ requests to re-check live state.
   asks for a minimal non-container pipeline or compatibility checks prove Docker
   is unavailable.
 
+## Local Configuration Validation
+
+Before using generated or edited repo-owned TeamCity configuration, validate it
+locally when the relevant validator is available.
+
+- For Kotlin DSL, run the TeamCity Kotlin DSL Maven validation goal for the
+  checked-in settings project.
+- For TeamCity YAML, run schema validation against the generated YAML before
+  creating or updating the server-side object.
+- If local validation is unavailable or cannot run in the current environment,
+  report that explicitly and continue only with MCP or server-side validation.
+
 ## Failure Patterns
 
 ### VCS Authentication

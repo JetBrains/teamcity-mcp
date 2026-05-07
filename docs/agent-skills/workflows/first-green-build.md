@@ -27,15 +27,17 @@ configuration.
    - create a new build configuration
    - create a pipeline only when the project needs multiple stages
 7. Choose build steps using `../shared/build-step-selection.md`.
-8. Queue a personal build when possible.
-9. Monitor the build status.
-10. If the build fails:
+8. Validate generated or edited repo-owned TeamCity configuration locally when a
+   suitable validator is available.
+9. Queue a personal build when possible.
+10. Monitor the build status.
+11. If the build fails:
    - get build problems
    - get failed tests
    - read focused log ranges with `teamcity_build_log`
    - apply the smallest safe fix to project files or TeamCity configuration
    - rerun a personal build
-11. Repeat until the build is green or blocked by missing credentials,
+12. Repeat until the build is green or blocked by missing credentials,
    permissions, incompatible agents, unavailable services, or unclear user
    intent.
 

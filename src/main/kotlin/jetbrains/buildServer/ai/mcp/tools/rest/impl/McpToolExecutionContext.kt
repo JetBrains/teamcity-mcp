@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
+import javax.servlet.http.HttpServletRequest
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
@@ -16,10 +17,13 @@ class McpToolExecutionContext {
     suspend fun <T> withOperationContext(
         user: SUser?,
         capturedSecurityContext: SecurityContext = SecurityContextHolder.getContext(),
+        requestData: RequestData = RequestData(emptyMap(), emptyMap()),
         block: suspend () -> T
     ): T {
         return withContext(
-            SecurityContextElement(capturedSecurityContext) + UserElement(user)
+            SecurityContextElement(capturedSecurityContext)
+                    + UserElement(user)
+                    + RequestDataElement(requestData)
         ) {
             block()
         }
@@ -28,12 +32,33 @@ class McpToolExecutionContext {
     suspend fun currentUser(): SUser? {
         return currentCoroutineContext()[UserElement]?.user
     }
+
+    suspend fun currentRequestData(): RequestData? {
+        return currentCoroutineContext()[RequestDataElement]?.requestData
+    }
+
+    suspend fun applyRequestData(request: HttpServletRequest) {
+        val data = currentRequestData() ?: return
+        data.sessionAttributes.forEach { (key, value) ->
+            request.session.setAttribute(key, value)
+        }
+        data.requestAttributes.forEach { (key, value) ->
+            request.setAttribute(key, value)
+        }
+    }
+
 }
 
 private class UserElement(
     val user: SUser?
 ) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<UserElement>
+}
+
+private class RequestDataElement(
+    val requestData: RequestData
+) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<RequestDataElement>
 }
 
 

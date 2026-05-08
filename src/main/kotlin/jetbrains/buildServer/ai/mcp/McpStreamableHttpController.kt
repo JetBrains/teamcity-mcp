@@ -169,12 +169,13 @@ class McpStreamableHttpController(
         val capturedUser = securityContext.authorityHolder as? SUser
 
         val capturedSecurityContext = SecurityContextHolder.getContext()
+        val capturedRequestData = captureRequestData(servletRequest)
         job.set(launch(CoroutineName(coroutineName)) {
             try {
                 toolExecutionContext.withOperationContext(
                     user = capturedUser,
                     capturedSecurityContext = capturedSecurityContext,
-                    requestData = captureRequestData(servletRequest)
+                    requestData = capturedRequestData
                 ) {
                     block(result)
                 }

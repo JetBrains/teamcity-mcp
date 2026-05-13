@@ -1,5 +1,6 @@
 package jetbrains.buildServer.ai.mcp.tools.rest
 
+import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -494,7 +495,7 @@ class RestGetToolTest {
         fun `response has empty notes array when no notes apply`() = runBlocking {
             val result = tool(succeedingClient("{}")).execute(buildJsonObject {
                 put("path", "/app/rest/builds")
-                put("query", "locator=start:0,count:10&fields=build(id)")
+                put("query", "locator=branch:default:any,start:0,count:10&fields=build(id,branchName)")
             })
             Assertions.assertFalse(result.isError)
             val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray
@@ -740,6 +741,262 @@ class RestGetToolTest {
             })
             Assertions.assertTrue(result.isError)
             Assertions.assertTrue(result.text.contains("400"))
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Branch awareness — TW-99613 (notes only; query is never mutated)
+    // -----------------------------------------------------------------------
+
+    @Nested
+    inner class BranchAwareness {
+
+        private fun notesOf(result: McpToolResult): String =
+            parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
+
+        // --- Top-level locator on /app/rest/builds ---
+
+        @Test
+        fun `warns on builds path when locator missing branch`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=buildType:(id:BT1),start:0,count:10&fields=build(id,branchName)")
+            })
+            Assertions.assertTrue(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on builds path when branch dimension present`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=buildType:(id:BT1),branch:name:main,start:0,count:10&fields=build(id,branchName)")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on builds path when branch default any present`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=branch:default:any,start:0,count:10&fields=build(id,branchName)")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on builds path single resource lookup`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/id:123")
+                put("query", "fields=id,status")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on builds path when defaultFilter false`() = runBlocking {
+            // defaultFilter:false suppresses BuildPromotionFinder's default-branch fallback;
+            // warning here would be a false alarm.
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=buildType:(id:BT1),defaultFilter:false,start:0,count:10&fields=build(id,branchName)")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        // --- Issue 2: path-embedded locator on /app/rest/builds/aggregated/<locator>/status ---
+
+        @Test
+        fun `warns on aggregated status when path locator missing branch`() = runBlocking {
+            // /app/rest/builds/aggregated/<locator>/status routes through BuildPromotionFinder
+            // — same default-branch trap, but the locator is in the path, not in `query`.
+            val result = tool(succeedingClient("UNKNOWN")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
+            })
+            Assertions.assertTrue(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on aggregated status when path locator has branch`() = runBlocking {
+            val result = tool(succeedingClient("SUCCESS")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1),branch:default:any/status")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on aggregated status when path locator has defaultFilter false`() = runBlocking {
+            val result = tool(succeedingClient("SUCCESS")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1),defaultFilter:false/status")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `no fields tip on aggregated status because response is plain text`() = runBlocking {
+            // The fields tip is about `fields=build(...)` selection on a builds list — not
+            // applicable on aggregated/status (plain-text endpoint).
+            val result = tool(succeedingClient("FAILURE")).execute(buildJsonObject {
+                put("path", "/app/rest/builds/aggregated/buildType:(id:BT1)/status")
+            })
+            Assertions.assertFalse(notesOf(result).contains("Include `branchName`"))
+        }
+
+        @Test
+        fun `does not warn on non-builds path`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/projects")
+                put("query", "locator=start:0,count:10&fields=project(id)")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on buildQueue because QueuedBuildFinder has no branch dimension`() = runBlocking {
+            // /app/rest/buildQueue's QueuedBuildFinder does not declare `branch:` — warning
+            // (or injecting) would mislead the agent into producing an unknown-dimension error.
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("query", "locator=start:0,count:5")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        // --- Nested build:(...) sub-locator on changes/testOccurrences/problemOccurrences ---
+
+        @Test
+        fun `warns on testOccurrences when build sublocator lacks branch`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1)),start:0,count:10&fields=testOccurrence(name)")
+            })
+            val notes = notesOf(result)
+            Assertions.assertTrue(notes.contains("build:(...)") && notes.contains("default-branch"),
+                "expected nested-locator warning, got: $notes")
+        }
+
+        @Test
+        fun `warns on problemOccurrences when build sublocator lacks branch`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/problemOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1)),start:0,count:10")
+            })
+            Assertions.assertTrue(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `warns on changes when build sublocator lacks branch`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/changes")
+                put("query", "locator=build:(buildType:(id:BT1)),start:0,count:10")
+            })
+            Assertions.assertTrue(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on testOccurrences when build sublocator already has branch`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1),branch:default:any),start:0,count:10")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `still warns on testOccurrences when branch is top-level but missing inside build sublocator`() = runBlocking {
+            // Top-level `branch:feature-x` filters test-occurrences themselves, but the inner
+            // build:(buildType:(...)) is resolved by BuildPromotionFinder independently and still
+            // defaults to the default branch. The warning must fire even though `branch:` appears
+            // somewhere in the locator.
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1)),branch:feature-x,start:0,count:10")
+            })
+            val notes = notesOf(result)
+            Assertions.assertTrue(notes.contains("build:(...)") && notes.contains("default-branch"),
+                "expected nested-locator warning even with top-level branch:, got: $notes")
+        }
+
+        @Test
+        fun `does not warn on testOccurrences when build sublocator has defaultFilter false`() = runBlocking {
+            // `defaultFilter:false` inside the build:() group disables the default-branch fallback
+            // for that sub-locator (BuildPromotionFinder.setDefaultsToLocator returns early).
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1),defaultFilter:false),start:0,count:10")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `warns when only one of multiple build sublocators is missing branch`() = runBlocking {
+            // First group has branch, second doesn't → still warn.
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/changes")
+                put("query", "locator=or(build:(buildType:(id:A),branch:default:any),build:(buildType:(id:B))),start:0,count:10")
+            })
+            Assertions.assertTrue(notesOf(result).contains("default-branch"))
+        }
+
+        @Test
+        fun `does not warn on testOccurrences without build sublocator`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=status:FAILURE,start:0,count:10")
+            })
+            Assertions.assertFalse(notesOf(result).contains("default-branch"))
+        }
+
+        // --- branchName fields tip (only on /app/rest/builds) ---
+
+        @Test
+        fun `flags missing branchName on builds path when build subselect present`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=start:0,count:10&fields=build(id,number,status)")
+            })
+            Assertions.assertTrue(notesOf(result).contains("Include `branchName`"))
+        }
+
+        @Test
+        fun `does not flag branchName when already in build subselect`() = runBlocking {
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=branch:default:any,start:0,count:10&fields=build(id,branchName,number)")
+            })
+            Assertions.assertFalse(notesOf(result).contains("Include `branchName`"))
+        }
+
+        @Test
+        fun `does not flag branchName on testOccurrences even with build subselect in fields`() = runBlocking {
+            // The fields tip is per-build branchName visibility; only makes sense when the
+            // response IS a builds list, not test occurrences.
+            val result = tool(succeedingClient("{}")).execute(buildJsonObject {
+                put("path", "/app/rest/testOccurrences")
+                put("query", "locator=build:(buildType:(id:BT1),branch:default:any),start:0,count:10&fields=testOccurrence(name,build(id))")
+            })
+            Assertions.assertFalse(notesOf(result).contains("Include `branchName`"))
+        }
+
+        // --- Query is never mutated ---
+
+        @Test
+        fun `query is never mutated for branch`() = runBlocking {
+            val client = CapturingClient()
+            tool(client).execute(buildJsonObject {
+                put("path", "/app/rest/builds")
+                put("query", "locator=buildType:(id:BT1),start:0,count:10&fields=build(id,branchName)")
+            })
+            Assertions.assertFalse(client.capturedQuery!!.contains("branch:"),
+                "branch should NOT have been injected; got: ${client.capturedQuery}")
+        }
+
+        // --- Description references ---
+
+        @Test
+        fun `description mentions branch awareness`() {
+            val description = tool().description
+            Assertions.assertTrue(description.contains("Branch awareness"),
+                "description should foreground branch awareness")
         }
     }
 }

@@ -579,4 +579,58 @@ class RestPostToolTest {
             assertTrue(result.text.contains("500"))
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Branch awareness — TW-99613
+    // -----------------------------------------------------------------------
+
+    @Nested
+    inner class BranchAwareness {
+        @Test
+        fun `description mentions branchName for build triggers`() {
+            val description = tool().description
+            assertTrue(description.contains("branchName"),
+                "description should mention branchName so the LLM is reminded to include it")
+        }
+
+        @Test
+        fun `description tells the model to determine the target branch first`() {
+            val description = tool().description.lowercase()
+            assertTrue(description.contains("branch"), "description should foreground branch handling")
+            assertTrue(description.contains("default branch"), "description should explain the default-branch fallback")
+        }
+
+        @Test
+        fun `appends branch warning note when posting to buildQueue without branchName`() = runBlocking {
+            val result = tool(succeedingClient("""{"id":1}""")).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("body", """{"buildType":{"id":"bt1"}}""")
+            })
+            val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray
+            assertTrue(notes.any { it.jsonPrimitive.content.contains("branchName") },
+                "expected branchName warning in notes, got: $notes")
+        }
+
+        @Test
+        fun `no branch warning when branchName provided in body`() = runBlocking {
+            val result = tool(succeedingClient("""{"id":1}""")).execute(buildJsonObject {
+                put("path", "/app/rest/buildQueue")
+                put("body", """{"buildType":{"id":"bt1"},"branchName":"feature-x"}""")
+            })
+            val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
+            assertFalse(notes.contains("branchName"),
+                "expected no branchName warning when branchName is provided, got: $notes")
+        }
+
+        @Test
+        fun `no branch warning when posting to non-buildQueue path`() = runBlocking {
+            val s = settings(setOf("/app/rest/buildQueue", "/app/rest/projects"))
+            val result = tool(succeedingClient("""{"id":1}"""), s).execute(buildJsonObject {
+                put("path", "/app/rest/projects")
+                put("body", """{"name":"test"}""")
+            })
+            val notes = parseResultJson(result.text)["meta"]!!.jsonObject["notes"]!!.jsonArray.toString()
+            assertFalse(notes.contains("branchName"))
+        }
+    }
 }

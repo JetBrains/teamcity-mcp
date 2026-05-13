@@ -51,6 +51,8 @@ class RestPostBraveTool(
         |
         |IMPORTANT: Read "teamcity://guides/rest-api" before using this tool.
         |
+        |Before triggering a build to `$BUILD_QUEUE_PATH`, determine the target branch from the user's working context (current git branch via `git rev-parse --abbrev-ref HEAD`, the branch open in the IDE, or by asking). Pass it as `branchName` in the body. Without `branchName`, the build runs on the configuration's default branch — and because this tool does NOT enforce `"personal": true`, that build is real and team-visible. The response includes a warning note when `branchName` is missing.
+        |
         |The body is passed through unchanged — nothing is injected or rewritten. A POST to `$BUILD_QUEUE_PATH` without `"personal": true` creates a real, team-visible queued build; include `"personal": true` in the body for an isolated run.
         |Allowed POST paths come from the `$MCP_REST_POST_ALLOWED_PATHS` property; when unset, all `/app/rest/...` POST paths are allowed.
         |
@@ -65,7 +67,7 @@ class RestPostBraveTool(
                     "description", """
                     |REST API endpoint path starting with /app/rest/.
                     |Examples:
-                    |  /app/rest/buildQueue                        — trigger a (non-personal) build
+                    |  /app/rest/buildQueue                        — trigger a (non-personal) build — set `branchName` in the body
                     |  /app/rest/buildQueue/id:123/approve         — approve a queued build
                     |  /app/rest/builds/id:123/tags/               — add a tag
                     |  /app/rest/projects                          — create a project
@@ -76,12 +78,15 @@ class RestPostBraveTool(
                 put("type", "string")
                 put(
                     "description", """
-                    |JSON request body. Must be a JSON object. Passed through unchanged.
+                    |JSON request body. Must be a JSON object. Passed through unchanged — this tool does NOT enforce `"personal": true`, so a build trigger here is real and team-visible. Always set `branchName` when triggering a build (see Branch awareness in the tool description above).
                     |
                     |Example — trigger a build on a specific branch:
                     |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-x"}
                     |
-                    |Example — add a tag:
+                    |Example — personal build on a branch:
+                    |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-x","personal":true}
+                    |
+                    |Example — add a tag (no branch concern; targets a specific build by id):
                     |  {"tag":[{"name":"release"}]}
                 """.trimMargin()
                 )
@@ -92,7 +97,7 @@ class RestPostBraveTool(
             }
             putJsonObject("fields") {
                 put("type", "string")
-                put("description", "Field selection for the response, e.g. id,number,status.")
+                put("description", "Field selection for the response. Include `branchName` so the response confirms which branch the build was queued on, e.g. id,number,status,branchName.")
             }
         },
         required = listOf("path", "body")
@@ -129,7 +134,14 @@ class RestPostBraveTool(
 
         return try {
             val response = client.post(normalizedPath, query, parsedBody.toString())
-            RestToolUtils.formatResponse(normalizedPath, query, response)
+            val notes = mutableListOf<String>()
+            if (normalizedPath == BUILD_QUEUE_PATH && !parsedBody.containsKey("branchName")) {
+                notes.add(
+                    "No `branchName` was provided — the build was queued on the configuration's default branch. " +
+                            "If the user is working on a non-default branch, cancel via DELETE $BUILD_QUEUE_PATH/id:<returnedId> and retrigger with `branchName` in the body."
+                )
+            }
+            RestToolUtils.formatResponse(normalizedPath, query, response, notes = notes)
         } catch (e: RestApiException) {
             LOGGER.warnAndDebugDetails("REST POST $normalizedPath failed with HTTP ${e.statusCode}", e)
             McpToolResult.error(RestToolUtils.formatRestApiError(e, ERROR_GUIDANCE))

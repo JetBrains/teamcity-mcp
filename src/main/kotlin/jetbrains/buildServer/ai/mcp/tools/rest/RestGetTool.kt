@@ -53,7 +53,23 @@ class RestGetTool(
 
         private val LOCATOR_START_PATTERN = Regex("""(?:^|,)start:\d+""")
         private val LOCATOR_COUNT_PATTERN = Regex("""(?:^|,)count:(\d+)""")
+        private val LOCATOR_BRANCH_PATTERN = Regex("""(?:^|,)branch:""")
         private val EMPTY_COUNT_PATTERN = Regex("""^\s*\{\s*"count"\s*:\s*0\s*[,}]""")
+
+        private const val BUILDS_COLLECTION_PATH = "/app/rest/builds"
+
+        private const val AGGREGATED_STATUS_PREFIX = "/app/rest/builds/aggregated/"
+        private const val AGGREGATED_STATUS_SUFFIX = "/status"
+
+        private val NESTED_BUILD_LOCATOR_PATHS = setOf(
+            "/app/rest/changes",
+            "/app/rest/testOccurrences",
+            "/app/rest/problemOccurrences"
+        )
+
+        private val LOCATOR_BUILD_SUBLOCATOR_OPENER = Regex("""(?:^|,|\()build:\(""")
+
+        private const val DEFAULT_FILTER_FALSE = "defaultFilter:false"
 
         private val ERROR_GUIDANCE = RestToolUtils.COMMON_ERROR_GUIDANCE + mapOf(
             400 to "Check your query syntax — locator or fields may be malformed."
@@ -74,6 +90,7 @@ class RestGetTool(
         |- Always specify `fields` for JSON endpoints to keep responses manageable; use `fields=count` to check size first.
         |- Paginate inside the locator with `start:N,count:M` (max $MAX_PAGE_SIZE). Do not URL-encode parameters.
         |- Use `defaultFilter:true` to exclude canceled and personal builds.
+        |- Branch awareness (IMPORTANT): TeamCity restricts build queries to the default branch unless `branch:` is in the locator. This affects `/app/rest/builds` (top-level locator) and `build:(...)` sub-locators inside `/app/rest/changes`, `/app/rest/testOccurrences`, `/app/rest/problemOccurrences`. When the user works on a non-default branch — or is unsure — add `branch:default:any` (all branches) or `branch:<name>` (specific branch), and include `branchName` in `fields=build(...)`. `meta.notes` flags missing branch hints. Exception: `/app/rest/buildQueue` has no `branch:` locator dimension; fetch all and filter client-side on `branchName`.
     """.trimMargin()
 
     override val inputSchema = McpToolSchema(
@@ -86,16 +103,16 @@ class RestGetTool(
                     |
                     |Common endpoints:
                     |  /app/rest/server - server info and version
-                    |  /app/rest/builds - build history
+                    |  /app/rest/builds - build history (branch-sensitive)
                     |  /app/rest/builds/id:<buildId> - specific build details
-                    |  /app/rest/builds/aggregated/<buildLocator>/status - aggregated build status (plain text)
-                    |  /app/rest/buildQueue - queued builds
+                    |  /app/rest/builds/aggregated/<buildLocator>/status - aggregated build status (branch-sensitive; plain text)
+                    |  /app/rest/buildQueue - queued builds (no `branch:` dim; filter client-side on `branchName`)
                     |  /app/rest/projects - all projects
                     |  /app/rest/buildTypes - build configurations
                     |  /app/rest/agents - build agents
-                    |  /app/rest/changes - VCS changes (use locator=build:(id:<buildId>) to filter by build)
-                    |  /app/rest/testOccurrences - test results (use locator=build:(id:<buildId>) to filter by build)
-                    |  /app/rest/problemOccurrences - build problems (use locator=build:(id:<buildId>) to filter by build)
+                    |  /app/rest/changes - VCS changes (branch-sensitive when the `build:(…)` sub-locator filters by buildType)
+                    |  /app/rest/testOccurrences - test results (same branch rule as /changes)
+                    |  /app/rest/problemOccurrences - build problems (same branch rule as /changes)
                     |
                     |  IMPORTANT: Do NOT use sub-resource paths like /builds/id:<buildId>/testOccurrences or
                     |  /builds/id:<buildId>/problemOccurrences for querying lists — they return ALL items ignoring
@@ -122,18 +139,20 @@ class RestGetTool(
                     |  project:(id:P1) - filter by project
                     |  status:SUCCESS / status:FAILURE - filter by status
                     |  state:finished / state:running / state:queued - filter by state
-                    |  branch:default:any - include all branches
+                    |  branch:default:any / branch:<name> - all branches / specific branch (see Branch awareness tip above)
                     |  defaultFilter:true - exclude personal and canceled builds (recommended)
                     |
                     |Pagination: always use start and count inside the locator (e.g. locator=...,start:0,count:10). Do NOT use start/count as top-level query parameters — they are deprecated and will be automatically migrated into the locator. Max count is $MAX_PAGE_SIZE. If omitted, start:0 and count:$DEFAULT_PAGE_SIZE are added to the locator automatically.
                     |
                     |Examples:
-                    |  locator=buildType:(id:MyBuild),defaultFilter:true,count:10&fields=build(id,number,status,finishOnAgentDate)
+                    |  locator=buildType:(id:MyBuild),branch:default:any,defaultFilter:true,count:10&fields=build(id,number,branchName,status,finishOnAgentDate)
                     |  fields=project(id,name,parentProjectId)
                     |  locator=project:(id:MyProject)&fields=buildType(id,name)
                     |  fields=agent(id,name,connected,authorized)
                     |  locator=build:(id:12345),status:FAILURE&fields=testOccurrence(id,name,status,details)
                     |  locator=build:(id:12345)&fields=change(id,version,username,comment)
+                    |  # Filtering tests by buildType — branch goes INSIDE the build:(…) group
+                    |  locator=build:(buildType:(id:MyBuild),branch:default:any),status:FAILURE&fields=testOccurrence(id,name,status,details)
                 """.trimMargin()
                 )
             }
@@ -334,6 +353,8 @@ class RestGetTool(
             ?.filter { it.isNotEmpty() }
             ?.forEach { notes.add(it) }
 
+        notes.addAll(branchAwarenessNotes(path, paging.query))
+
         if (!hasFields && !isPlainTextEndpoint) {
             notes.add("No 'fields' parameter specified. Response may be large. Consider adding fields to select only needed data, e.g. fields=build(id,number,status)")
         }
@@ -360,6 +381,96 @@ class RestGetTool(
         ) {
             put("truncated", response.truncated)
             put("hasNextHref", hasNextHref)
+        }
+    }
+
+    /**
+     * Returns advisory notes for branch awareness — we never mutate the query.
+     *
+     * /app/rest/builds and /app/rest/builds/aggregated/<locator>/status
+     * dispatch a top-level locator through BuildPromotionFinder, which
+     * silently restricts results to the default branch unless `branch:` is provided.
+     * Same for endpoints whose `build:(...)` sub-locator also routes through BuildPromotionFinder.
+     *
+     * In any of the locator-based checks, a `defaultFilter:false` in the relevant scope suppresses the
+     * note: server does NOT apply the default-branch fallback there.
+     *
+     * `/app/rest/buildQueue` is intentionally NOT in scope: QueuedBuildFinder has no `branch:`
+     * dimension at all.
+     */
+    private fun branchAwarenessNotes(path: String, query: String): List<String> {
+        val normalizedPath = path.trimEnd('/')
+        val params = parseQueryParams(query)
+        val queryLocator = params.firstOrNull { it.first == "locator" }?.second ?: ""
+
+        val topLevelLocator: String? = when {
+            normalizedPath == BUILDS_COLLECTION_PATH -> queryLocator
+            else -> extractAggregatedPathLocator(normalizedPath)
+        }
+
+        val topLevelMissing = topLevelLocator != null &&
+                !LOCATOR_BRANCH_PATTERN.containsMatchIn(topLevelLocator) &&
+                !topLevelLocator.contains(DEFAULT_FILTER_FALSE)
+
+        val nestedMissing = normalizedPath in NESTED_BUILD_LOCATOR_PATHS &&
+                hasUnsafeBuildSublocator(queryLocator)
+
+        if (!topLevelMissing && !nestedMissing) return emptyList()
+
+        val notes = mutableListOf<String>()
+        notes.add(if (topLevelMissing) {
+            "Branch filter is at default: TeamCity returns only default-branch builds. If the user works on a non-default branch — or is unsure — retry with `branch:default:any` in the locator (all branches) or `branch:<name>` (specific branch)."
+        } else {
+            "Branch filter is at default inside `build:(...)`: TeamCity resolves that sub-locator to default-branch builds only. A top-level `branch:` outside the `build:(...)` group does NOT help — the inner sub-locator is evaluated independently. If the user works on a non-default branch — or is unsure — retry with `branch:default:any` (or `branch:<name>`) inside the `build:(...)` group."
+        })
+
+        // The fields tip only makes sense when the response IS a builds list itself.
+        if (topLevelMissing && normalizedPath == BUILDS_COLLECTION_PATH) {
+            val fieldsValue = params.firstOrNull { it.first == "fields" }?.second ?: ""
+            if (fieldsValue.contains("build(") && !fieldsValue.contains("branchName")) {
+                notes.add("Include `branchName` inside `fields=build(...)` so each result carries its branch (e.g. `fields=build(id,number,branchName,...)`).")
+            }
+        }
+        return notes
+    }
+
+    private fun extractAggregatedPathLocator(normalizedPath: String): String? {
+        if (!normalizedPath.startsWith(AGGREGATED_STATUS_PREFIX)) return null
+        if (!normalizedPath.endsWith(AGGREGATED_STATUS_SUFFIX)) return null
+        val start = AGGREGATED_STATUS_PREFIX.length
+        val end = normalizedPath.length - AGGREGATED_STATUS_SUFFIX.length
+        if (start >= end) return null
+        return normalizedPath.substring(start, end)
+    }
+
+    /**
+     * True if [locator] contains at least one `build:(…)` group whose own body lacks `branch:`
+     * AND lacks `defaultFilter:false`.
+     */
+    private fun hasUnsafeBuildSublocator(locator: String): Boolean {
+        if (locator.isEmpty()) return false
+        var searchFrom = 0
+        val opener = LOCATOR_BUILD_SUBLOCATOR_OPENER
+        while (true) {
+            val match = opener.find(locator, searchFrom) ?: return false
+            val bodyStart = match.range.last + 1   // position just after the `(`
+            // Find matching close-paren via depth counter starting at depth 1.
+            var depth = 1
+            var i = bodyStart
+            while (i < locator.length) {
+                when (locator[i]) {
+                    '(' -> depth++
+                    ')' -> {
+                        depth--
+                        if (depth == 0) break
+                    }
+                }
+                i++
+            }
+            if (depth != 0) return false  // unbalanced — bail rather than misreport
+            val body = locator.substring(bodyStart, i)
+            if (!body.contains("branch:") && !body.contains(DEFAULT_FILTER_FALSE)) return true
+            searchFrom = i + 1
         }
     }
 

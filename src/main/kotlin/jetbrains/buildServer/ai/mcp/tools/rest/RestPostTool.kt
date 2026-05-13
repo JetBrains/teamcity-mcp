@@ -41,16 +41,18 @@ class RestPostTool(
         |
         |IMPORTANT: Before your first use, read the resource "teamcity://guides/rest-api" (Part 2) for guidance on triggering builds, request body format, and monitoring workflows.
         |
+        |Before triggering a build to $BUILD_QUEUE_PATH, determine the target branch from the user's working context (current git branch via `git rev-parse --abbrev-ref HEAD`, the branch open in the IDE, or by asking). Pass it as `branchName` in the body. Without `branchName`, the build runs on the configuration's default branch — rarely what the user actually wants. The response includes a warning note when `branchName` is missing.
+        |
         |Limited to allowed endpoints (default: $BUILD_QUEUE_PATH). All requests are enforced as personal builds — the tool automatically sets `"personal": true` in the request body.
         |Use this for safe, isolated actions such as queueing a personal build and then inspecting it with teamcity_rest_get and teamcity_build_log.
         |
         |Response format: same JSON envelope as teamcity_rest_get — meta(url, statusCode, notes), contentType, body/bodyText.
         |
-        |Example — trigger a personal build:
+        |Example — trigger a personal build on a specific branch:
         |  path: $BUILD_QUEUE_PATH
-        |  body: {"buildType":{"id":"MyBuildConfig_Build"}}
+        |  body: {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-x"}
         |  query: moveToTop=true
-        |  fields: id,number,status,personal,buildType(id,name)
+        |  fields: id,number,status,personal,branchName,buildType(id,name)
     """.trimMargin()
 
     override val inputSchema = McpToolSchema(
@@ -68,17 +70,16 @@ class RestPostTool(
                 put("type", "string")
                 put(
                     "description", """
-                    |JSON request body. Must be a JSON object.
-                    |The tool automatically enforces "personal": true in the body.
+                    |JSON request body. Must be a JSON object. The tool automatically enforces `"personal": true`. Always set `branchName` (see Branch awareness in the tool description above).
                     |
-                    |Example for triggering a build:
-                    |  {"buildType":{"id":"MyBuildConfig_Build"}}
-                    |
-                    |With branch:
+                    |Preferred (with branch):
                     |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-branch"}
                     |
+                    |Minimal (only when the user explicitly wants the default branch):
+                    |  {"buildType":{"id":"MyBuildConfig_Build"}}
+                    |
                     |With comment:
-                    |  {"buildType":{"id":"MyBuildConfig_Build"},"comment":{"text":"Triggered by AI agent"}}
+                    |  {"buildType":{"id":"MyBuildConfig_Build"},"branchName":"feature-branch","comment":{"text":"Triggered by AI agent"}}
                 """.trimMargin()
                 )
             }
@@ -86,8 +87,8 @@ class RestPostTool(
                 put("type", "string")
                 put(
                     "description", """
-                    |Field selection for the response. Controls which fields are returned.
-                    |Example: id,number,status,personal,buildType(id,name)
+                    |Field selection for the response. Include `branchName` so the response confirms which branch the build was queued on.
+                    |Example: id,number,status,personal,branchName,buildType(id,name)
                 """.trimMargin()
                 )
             }
@@ -149,10 +150,14 @@ class RestPostTool(
 
         return try {
             val response = client.post(normalizedPath, query, enforcedBody.toString())
-            RestToolUtils.formatResponse(
-                normalizedPath, query, response,
-                notes = listOf("\"personal\": true was enforced in the request body.")
-            )
+            val notes = mutableListOf("\"personal\": true was enforced in the request body.")
+            if (normalizedPath == BUILD_QUEUE_PATH && !parsedBody.containsKey("branchName")) {
+                notes.add(
+                    "No `branchName` was provided — the personal build was queued on the configuration's default branch. " +
+                            "If the user is working on a non-default branch, retrigger with `branchName` in the body."
+                )
+            }
+            RestToolUtils.formatResponse(normalizedPath, query, response, notes = notes)
         } catch (e: RestApiException) {
             LOGGER.warnAndDebugDetails("REST POST $normalizedPath failed with HTTP ${e.statusCode}", e)
             McpToolResult.error(RestToolUtils.formatRestApiError(e, ERROR_GUIDANCE))

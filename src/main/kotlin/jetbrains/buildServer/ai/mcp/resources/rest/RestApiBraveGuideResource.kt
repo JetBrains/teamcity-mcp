@@ -172,8 +172,10 @@ class RestApiBraveGuideResource : BraveModeAwareMcpResource {
     - **`branch:default:any`** — all branches. Use when the user doesn't specify a branch or mentions working on a non-default branch. If a query returns 0 results unexpectedly, retry with this.
     - **`branch:<name>`** — exact branch (e.g., `branch:my-feature`). Use when the user asks about a specific branch.
     - *(omitted)* — default branch only.
-    
+
     Include `branchName` in `fields` when querying across branches.
+
+    Exception: `defaultFilter:false` and single-build lookups (`id:`/`taskId:`/`buildId:`) skip the default-branch fallback — results span all branches even without `branch:`.
     
     Use `${'$'}help` to discover supported locator dimensions: `path=/app/rest/builds/${'$'}help`
     

@@ -12,8 +12,6 @@ need to get a working dev environment and land a change.
 - For bugs: include TeamCity version, plugin version, MCP client (Claude/
   Junie/…), the request that failed, and any relevant log output from
   `<DATA_DIR>/logs/teamcity-server.log`.
-- For security vulnerabilities: **do not file a public issue**.
-  See [SECURITY.md](SECURITY.md).
 
 ## Development setup
 

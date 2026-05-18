@@ -64,31 +64,46 @@ TeamCity SDK — please open an issue if you're blocked.
 ```
 
 **Integration tests** (require a running TeamCity server with the plugin
-installed):
+installed). Run only the integration suite against an already-running server
+— no API keys needed:
 
 ```bash
-# Full lifecycle: build plugin, start server from a TC distribution archive,
-# run tests, tear down.
-TC_DIST=~/Downloads/TeamCity-2026.1.tar.gz ./run_integration_tests.sh
-
-# Or against an already-running server:
-TC_SERVER_URL=http://localhost:8111 \
-TC_SERVER_TOKEN=eyJ... \
-TC_HOME=/path/to/teamcity-home \
-./run_integration_tests.sh
+./gradlew integrationTest \
+  -DTC_SERVER_URL=http://localhost:8111 \
+  -DTC_SERVER_TOKEN=eyJ... \
+  -DTC_HOME=/path/to/teamcity-home
 ```
 
-**End-to-end tests** (drive real AI agents in Docker — require API keys):
+**End-to-end tests** (drive real AI agents in Docker — require provider API
+keys). Each agent's e2e test asserts its key is present (`ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `GEMINI_API_KEY`, `JUNIE_API_KEY`) and fails the test
+otherwise — supply only the keys for the agents you want to exercise and the
+others will fail with a clear "<KEY> not set" message that you can ignore:
 
 ```bash
 ./gradlew e2eTest \
+  -DTC_SERVER_URL=http://localhost:8111 \
+  -DTC_SERVER_TOKEN=eyJ... \
+  -DTC_HOME=/path/to/teamcity-home \
   -DANTHROPIC_API_KEY=sk-ant-... \
   -DOPENAI_API_KEY=sk-...
 ```
 
 E2E tests are slow and external-network-dependent; they're excluded from the
-default `integrationTest` task and only run when you explicitly invoke
-`e2eTest`.
+`integrationTest` task and only run when you explicitly invoke `e2eTest`.
+
+**Full lifecycle** (build plugin, start a fresh server from a TC distribution
+archive, run **both** integration **and** e2e tests, tear down). This path
+always runs `e2eTest` after `integrationTest`, so without agent keys the e2e
+phase will fail; that's expected and the integration results are still
+reported:
+
+```bash
+TC_DIST=~/Downloads/TeamCity-2026.1.tar.gz \
+ANTHROPIC_API_KEY=sk-ant-... \
+OPENAI_API_KEY=sk-... \
+./run_integration_tests.sh
+```
 
 ### IDE setup
 

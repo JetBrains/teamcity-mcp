@@ -109,10 +109,3 @@ requests are all tracked on the
 [GitHub issue tracker](https://github.com/JetBrains/teamcity-mcp/issues).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and the PR
 process, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
-
-Security issues: please **do not** open a public issue — see
-[SECURITY.md](SECURITY.md).
-
-## License
-
-Licensed under the [Apache License, Version 2.0](LICENSE).

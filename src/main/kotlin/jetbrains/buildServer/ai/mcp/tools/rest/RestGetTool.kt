@@ -51,8 +51,6 @@ class RestGetTool(
         internal const val DEFAULT_PAGE_SIZE = 10
         internal const val MAX_PAGE_SIZE = 100
 
-        private val LOCATOR_START_PATTERN = Regex("""(?:^|,)start:\d+""")
-        private val LOCATOR_COUNT_PATTERN = Regex("""(?:^|,)count:(\d+)""")
         private val LOCATOR_BRANCH_PATTERN = Regex("""(?:^|,)branch:""")
         private val EMPTY_COUNT_PATTERN = Regex("""^\s*\{\s*"count"\s*:\s*0\s*[,}]""")
 
@@ -199,9 +197,10 @@ class RestGetTool(
         val params = parseQueryParams(query)
         val locatorValue = params.firstOrNull { it.first == "locator" }?.second ?: ""
 
-        // Detect pagination in locator
-        val hasLocatorStart = LOCATOR_START_PATTERN.containsMatchIn(locatorValue)
-        val hasLocatorCount = LOCATOR_COUNT_PATTERN.containsMatchIn(locatorValue)
+        // Detect pagination in the outer locator only. Nested locators like
+        // build:(buildType:(id:BT1),count:1) must not satisfy collection paging.
+        val hasLocatorStart = topLevelLocatorDimension(locatorValue, "start") != null
+        val hasLocatorCount = topLevelLocatorDimension(locatorValue, "count") != null
 
         // Detect deprecated top-level start/count
         val rawTopStart = params.firstOrNull { it.first == "start" }
@@ -313,14 +312,64 @@ class RestGetTool(
     }
 
     private fun capLocatorCount(query: String, locatorValue: String): CapResult? {
-        val locatorMatch = LOCATOR_COUNT_PATTERN.find(locatorValue) ?: return null
-        val countVal = locatorMatch.groupValues[1].toIntOrNull() ?: return null
+        val countDimension = topLevelLocatorDimension(locatorValue, "count") ?: return null
+        val countVal = countDimension.value.toIntOrNull() ?: return null
         if (countVal <= MAX_PAGE_SIZE) return null
 
-        val oldFragment = "count:$countVal"
-        val newFragment = "count:$MAX_PAGE_SIZE"
-        val newQuery = query.replaceFirst(oldFragment, newFragment)
+        val newLocator = locatorValue.replaceRange(
+            countDimension.start,
+            countDimension.end,
+            "count:$MAX_PAGE_SIZE"
+        )
+        val newQuery = rebuildQueryWithLocator(parseQueryParams(query), newLocator)
         return CapResult(newQuery, "Count was reduced from $countVal to $MAX_PAGE_SIZE (maximum allowed).")
+    }
+
+    private fun topLevelLocatorDimension(locator: String, name: String): LocatorDimension? {
+        if (locator.isEmpty()) return null
+
+        var depth = 0
+        var segmentStart = 0
+        var i = 0
+        while (i <= locator.length) {
+            val atEnd = i == locator.length
+            if (!atEnd) {
+                when (locator[i]) {
+                    '(' -> depth++
+                    ')' -> if (depth > 0) depth--
+                }
+            }
+
+            if (atEnd || (locator[i] == ',' && depth == 0)) {
+                parseTopLevelLocatorSegment(locator, segmentStart, i)
+                    ?.takeIf { it.name == name }
+                    ?.let { return it }
+                segmentStart = i + 1
+            }
+            i++
+        }
+        return null
+    }
+
+    private fun parseTopLevelLocatorSegment(locator: String, rawStart: Int, rawEnd: Int): LocatorDimension? {
+        var start = rawStart
+        var end = rawEnd
+        while (start < end && locator[start].isWhitespace()) start++
+        while (end > start && locator[end - 1].isWhitespace()) end--
+        if (start >= end) return null
+
+        val colon = locator.indexOf(':', start)
+        if (colon < 0 || colon >= end) return null
+
+        val name = locator.substring(start, colon).trim()
+        if (name.isEmpty()) return null
+
+        return LocatorDimension(
+            name = name,
+            value = locator.substring(colon + 1, end).trim(),
+            start = start,
+            end = end
+        )
     }
 
     private fun rebuildQueryWithLocator(
@@ -496,4 +545,5 @@ class RestGetTool(
 }
 
 private data class CapResult(val query: String, val note: String)
+private data class LocatorDimension(val name: String, val value: String, val start: Int, val end: Int)
 private data class MigrationResult(val query: String, val note: String)

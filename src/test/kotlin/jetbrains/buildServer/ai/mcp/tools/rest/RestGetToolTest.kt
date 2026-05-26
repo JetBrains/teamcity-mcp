@@ -268,6 +268,49 @@ class RestGetToolTest {
             Assertions.assertEquals(original, result.query)
         }
 
+            @Test
+            fun `nested count in locator is not treated as outer pagination`() {
+                // build:(...,count:1) is a nested sub-locator dimension, not outer-collection paging
+                val result = tool().ensurePaging("locator=build:(buildType:(id:BT1),count:1)&fields=build(id)")
+                Assertions.assertTrue(result.enforced)
+                Assertions.assertTrue(result.query.contains("start:0"))
+                Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+                // Nested count must remain untouched
+                Assertions.assertTrue(result.query.contains("count:1"))
+            }
+    
+            @Test
+            fun `nested start in locator is not treated as outer pagination`() {
+                val result = tool().ensurePaging("locator=build:(buildType:(id:BT1),start:5)&fields=build(id)")
+                Assertions.assertTrue(result.enforced)
+                Assertions.assertTrue(result.query.contains("start:0"))
+                Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+                // Nested start must remain untouched
+                Assertions.assertTrue(result.query.contains("start:5"))
+            }
+    
+            @Test
+            fun `count cap targets outer count and leaves nested count untouched`() {
+                val result = tool().ensurePaging("locator=build:(buildType:(id:BT1),count:5),start:0,count:200&fields=build(id)")
+                Assertions.assertTrue(result.query.contains("count:${RestGetTool.MAX_PAGE_SIZE}"))
+                // Inner count:5 must be preserved verbatim
+                Assertions.assertTrue(result.query.contains("count:5"))
+                // Outer count:200 must be gone
+                Assertions.assertFalse(result.query.contains("count:200"))
+                Assertions.assertNotNull(result.note)
+            }
+    
+            @Test
+            fun `nested count of 500 is not capped because it is not outer pagination`() {
+                // Only the outermost count is subject to MAX_PAGE_SIZE; nested count is part of a sub-locator
+                val result = tool().ensurePaging("locator=builds:(build:(buildType:(id:BT1),count:500))&fields=build(id)")
+                // Outer paging added with defaults
+                Assertions.assertTrue(result.query.contains("start:0"))
+                Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+                // Nested count:500 preserved — capping does not reach into sub-locators
+                Assertions.assertTrue(result.query.contains("count:500"))
+            }
+    
         // --- Top-level start/count migration into locator ---
 
         @Test

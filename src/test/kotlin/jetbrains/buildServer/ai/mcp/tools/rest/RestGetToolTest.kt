@@ -310,7 +310,55 @@ class RestGetToolTest {
                 // Nested count:500 preserved — capping does not reach into sub-locators
                 Assertions.assertTrue(result.query.contains("count:500"))
             }
-    
+
+        // --- Whitespace handling around top-level dimensions ---
+        // These validate the reviewer suggestion (trim spaces around a dimension) AND
+        // the constraint that spaces *inside* a value must never be stripped, because
+        // the locator is forwarded to TeamCity verbatim.
+
+        @Test
+        fun `whitespace around top-level dimensions is detected and outer count capped`() {
+            // Spaces after the commas separating top-level dimensions must not hide them
+            val result = tool().ensurePaging("locator=buildType:(id:BT1), count:200, start:0&fields=build(id)")
+            // Outer count must be detected despite the leading space and capped
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.MAX_PAGE_SIZE}"))
+            Assertions.assertFalse(result.query.contains("count:200"))
+            // start was already present, so it is not re-added with a default
+            Assertions.assertTrue(result.query.contains("start:0"))
+        }
+
+        @Test
+        fun `whitespace around outer count does not trigger a default count addition`() {
+            // " count:5 " must be recognised as the outer count, so no default count is appended
+            val result = tool().ensurePaging("locator=buildType:(id:BT1), count:5 &fields=build(id)")
+            Assertions.assertTrue(result.query.contains("count:5"))
+            Assertions.assertFalse(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+        }
+
+        @Test
+        fun `spaces inside a locator value are preserved when outer count is capped`() {
+            // A property value with internal spaces must survive verbatim — a blanket
+            // whitespace strip would corrupt it into "a b c" -> "abc".
+            val result = tool().ensurePaging(
+                "locator=item:(property:(name:env,value:a b c)),count:200&fields=build(id)"
+            )
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.MAX_PAGE_SIZE}"))
+            Assertions.assertFalse(result.query.contains("count:200"))
+            // Internal value spaces untouched
+            Assertions.assertTrue(result.query.contains("value:a b c"))
+        }
+
+        @Test
+        fun `spaces inside a locator value are preserved when default paging is added`() {
+            // Same constraint on the default-paging path (no outer paging present)
+            val result = tool().ensurePaging(
+                "locator=item:(property:(name:env,value:a b c))&fields=build(id)"
+            )
+            Assertions.assertTrue(result.query.contains("start:0"))
+            Assertions.assertTrue(result.query.contains("count:${RestGetTool.DEFAULT_PAGE_SIZE}"))
+            Assertions.assertTrue(result.query.contains("value:a b c"))
+        }
+
         // --- Top-level start/count migration into locator ---
 
         @Test

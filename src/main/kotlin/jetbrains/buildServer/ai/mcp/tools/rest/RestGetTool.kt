@@ -351,16 +351,15 @@ class RestGetTool(
         return null
     }
 
-    private fun parseTopLevelLocatorSegment(locator: String, rawStart: Int, rawEnd: Int): LocatorDimension? {
-        var start = rawStart
-        var end = rawEnd
-        while (start < end && locator[start].isWhitespace()) start++
-        while (end > start && locator[end - 1].isWhitespace()) end--
+    private fun parseTopLevelLocatorSegment(locator: String, start: Int, end: Int): LocatorDimension? {
         if (start >= end) return null
 
         val colon = locator.indexOf(':', start)
         if (colon < 0 || colon >= end) return null
 
+        // The name/value are trimmed so surrounding spaces (e.g. ", count: 5") don't
+        // affect dimension detection; the raw start/end offsets are kept so capLocatorCount
+        // can rewrite the dimension in place without disturbing the rest of the locator.
         val name = locator.substring(start, colon).trim()
         if (name.isEmpty()) return null
 

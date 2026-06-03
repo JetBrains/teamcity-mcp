@@ -6,8 +6,9 @@ server, so AI agents — Claude, Junie, Gemini, OpenAI Codex, and any other
 MCP-compatible client — can read build state, inspect logs, run REST API calls,
 and manage pipelines on your behalf.
 
-The plugin exposes a `streamable-http` MCP endpoint at `/app/mcp` on the
-TeamCity server.
+The plugin exposes a `streamable-http` MCP endpoint at
+`https://<your-teamcity>/app/mcp` on the TeamCity server. It implements MCP
+protocol version `2025-11-25` and also accepts `2025-06-18`.
 
 ## MCP capabilities
 
@@ -21,8 +22,6 @@ The plugin exposes the following capabilities to connected AI agents over MCP:
 - **Operation modes**:
   - **Safe (default)** — read-only and curated, safe-by-default write paths.
   - **Brave** — full read/write access, including DELETE and arbitrary POST.
-- **Per-tool allowlists** — restrict which REST and pipeline paths the AI
-  agent can hit.
 - **Auth-aware** — supports TeamCity bearer tokens and 2FA-equipped accounts.
 
 ## Requirements
@@ -54,10 +53,6 @@ Configuration is done via TeamCity internal properties
 | `teamcity.ai.mcp.enabled` | `true` | Master switch for the MCP server. |
 | `teamcity.ai.mcp.braveMode.enabled` | `false` | Enable destructive operations (PUT, DELETE, arbitrary POST). |
 | `teamcity.ai.mcp.pipeline.enabled` | `false` | Enable pipeline tools. |
-| `teamcity.ai.mcp.tools.enabled` | *(see source)* | Comma-separated allowlist of tool names. Empty value disables all tools. |
-| `teamcity.ai.mcp.resources.enabled` | *(see source)* | Comma-separated allowlist of resource names. |
-| `teamcity.ai.mcp.rest.post.allowed.paths` | unset | Comma-separated REST API path prefixes the POST tool may call. |
-| `teamcity.ai.mcp.pipeline.post.allowed.paths` | unset | Comma-separated path prefixes for the pipeline POST tool. |
 
 ## Connecting an AI agent
 

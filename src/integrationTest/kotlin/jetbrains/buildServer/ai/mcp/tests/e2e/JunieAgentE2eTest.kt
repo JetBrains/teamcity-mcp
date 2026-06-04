@@ -97,7 +97,9 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
         val output = runJuniePrompt(
             "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
                 "2. Then call \"introduce_yourself\" tool with name \"Junie\".\n" +
-                "3. Print the result as: RESULT: <text>")
+                "3. Print the tool's response on a single line starting with the prefix: " +
+                "RESULT: <text returned by the tool>\n" +
+                "Do not skip any of the steps. The final line of your reply MUST be the 'RESULT:' line.")
 
         output.dump("combined prompt")
             .assumeJunieAvailable("combined prompt")

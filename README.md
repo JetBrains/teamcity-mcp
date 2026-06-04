@@ -73,11 +73,6 @@ claude mcp add --transport http teamcity \
   --header "Authorization: Bearer <your-token>"
 ```
 
-### Junie
-
-Junie autodetects MCP servers from your TeamCity profile when the plugin is
-installed. Otherwise, add the endpoint manually in Junie's MCP settings.
-
 ### Other MCP clients
 
 The endpoint speaks the standard MCP `streamable-http` transport, so any

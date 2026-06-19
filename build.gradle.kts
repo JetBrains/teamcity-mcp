@@ -12,9 +12,9 @@ plugins {
 }
 
 val jdkVersion = (anyParam("jdkVersion"))?.toIntOrNull() ?: 21
-val teamcityVersion = anyParam("teamcityVersion") ?: "2026.1-SNAPSHOT"
+val teamcityVersion = anyParam("teamcityVersion") ?: "2026.2-SNAPSHOT"
 val pluginVersion = anyParam("PluginVersion")  ?: "SNAPSHOT-${SimpleDateFormat("yyyyMMddHHmm").format(Date())}"
-val localRepo = anyParam("TC_LOCAL_REPO_ABS")
+val localRepo = anyParam("TC_LOCAL_REPO_ABS") ?: anyParam("TC_LOCAL_REPO")
 
 kotlin {
     jvmToolchain(jdkVersion)

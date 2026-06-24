@@ -68,7 +68,7 @@ allprojects {
                 }
             }
         } else {
-            maven(url = "file:///$localRepo")
+            maven(url = uri(localRepo))
         }
         maven(url = "https://download.jetbrains.com/teamcity-repository")
         maven(url = "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")

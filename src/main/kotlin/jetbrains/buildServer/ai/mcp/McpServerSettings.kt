@@ -33,7 +33,7 @@ class SettingsService {
 
     fun isMcpServerEnabled() = TeamCityProperties.getBooleanOrTrue(MCP_FEATURE_TOGGLE)
 
-    fun isPipelineEnabled() = TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE)
+    fun isPipelineEnabled() = TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE)
 
     fun isBraveModeEnabled() = TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE)
 

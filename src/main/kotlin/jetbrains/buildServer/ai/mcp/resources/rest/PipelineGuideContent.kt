@@ -28,6 +28,7 @@ Important naming note:
 - the REST API path is **`/app/rest/pipelines`** (plural)
 
 Use `teamcity_pipeline_get` for GET requests under `/app/pipeline...`, and `teamcity_rest_get` for `/app/rest/...` reads (including `/app/rest/pipelines...`).
+NEVER call `teamcity_pipeline_get` with `/app/rest...`; use `teamcity_rest_get` for every `/app/rest...` path.
 
 ---
 
@@ -165,6 +166,8 @@ query: fields=branch(name,default)
 
 # Inspecting Pipeline Runs
 
+## Retrieving pipeline run data
+
 Use `teamcity_rest_get` for pipeline run data:
 
 ```
@@ -172,12 +175,31 @@ path: /app/rest/pipelines/MyPipeline/run/123456
 query: fields=number,build(id,state,status,statusText,branchName,finishOnAgentDate),jobs(job(id,name,build(id,state,status,statusText)))
 ```
 
-When diagnosing failures:
+## Finding the latest pipeline run
+
+To find the latest pipeline run, you need the pipeline's head build type id.
+If you do not know the pipeline's head build type id yet, use:
+
+```
+path: /app/rest/pipelines/MyPipeline
+query: fields=headBuildType(id)
+```
+
+When you know the head build type id, use:
+
+```
+path: /app/rest/builds
+query: locator=buildType:(id:MyPipelineHeadBuildTypeId),branch:default:any,state:any,count:1&fields=build(id)
+```
+
+Use the returned `build[0].id` as `{runId}`. `state:any` includes queued, running, and finished runs.
+Normal defaults still exclude personal, canceled, failed-to-start, and non-default-branch builds 
+unless you add `defaultFilter:false` or explicit dimensions such as `personal:any`, `canceled:any`, or `failedToStart:any`.
+
+## Diagnosing run failures
+
 - read the pipeline run first to find the failed job and its `build.id`
 - then use `teamcity://guides/build-failure-analysis` for build-level investigation
-
-Also available via `teamcity_rest_get`:
-- `GET /app/rest/pipelines/{id}/branches` — list branches
     """.trimIndent()
 
     fun brave(): String = """
@@ -187,6 +209,8 @@ TeamCity Pipelines are YAML-based CI configurations (alternative to classic buil
 
 Available tools: `teamcity_pipeline_get`, `teamcity_pipeline_post`, `teamcity_pipeline_delete`, `teamcity_rest_get`, `teamcity_rest_post`.
 If `teamcity.ai.mcp.pipeline.post.allowed.paths` is set, only matching POST paths work.
+
+NEVER call `teamcity_pipeline_get` with `/app/rest...`; use `teamcity_rest_get` for every `/app/rest...` GET path.
 
 For build failure diagnosis after you have a job's build id, read the resource `teamcity://guides/build-failure-analysis`.
 

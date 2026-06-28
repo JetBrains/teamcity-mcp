@@ -49,10 +49,10 @@ Configuration is done via TeamCity internal properties
 (`<DATA_DIR>/config/internal.properties`):
 
 | Property | Default | Description |
-| --- | --- | --- |
-| `teamcity.ai.mcp.enabled` | `true` | Master switch for the MCP server. |
+| --- |---------| --- |
+| `teamcity.ai.mcp.enabled` | `true`  | Master switch for the MCP server. |
 | `teamcity.ai.mcp.braveMode.enabled` | `false` | Enable destructive operations (PUT, DELETE, arbitrary POST). |
-| `teamcity.ai.mcp.pipeline.enabled` | `false` | Enable pipeline tools. |
+| `teamcity.ai.mcp.pipeline.enabled` | `true`  | Enable pipeline tools. |
 
 ## Connecting an AI agent
 

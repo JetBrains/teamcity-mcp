@@ -33,7 +33,7 @@ class SettingsServiceTest {
     @Test
     fun `pipeline is enabled by default and brave mode is disabled by default`() {
         mockkStatic(TeamCityProperties::class)
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         assertTrue(settingsService.isPipelineEnabled())
@@ -44,7 +44,7 @@ class SettingsServiceTest {
     fun `default tools exclude pipeline tools when pipeline support is disabled`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         val enabled = settingsService.getEnabledToolNames()
@@ -56,7 +56,7 @@ class SettingsServiceTest {
     fun `default tools include only pipeline get when pipeline is enabled and brave mode is off`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         val enabled = settingsService.getEnabledToolNames()
@@ -69,7 +69,7 @@ class SettingsServiceTest {
     fun `default tools include both pipeline tools when pipeline and brave mode are enabled`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns true
 
         val enabled = settingsService.getEnabledToolNames()
@@ -83,7 +83,7 @@ class SettingsServiceTest {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns
             "${RestGetTool.NAME},${PipelineGetTool.NAME},${PipelinePostTool.NAME}"
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         val enabled = settingsService.getEnabledToolNames()
@@ -123,7 +123,7 @@ class SettingsServiceTest {
     fun `default tools include introduce_yourself only when development mode is on`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns false
 
@@ -139,7 +139,7 @@ class SettingsServiceTest {
     fun `default resources include introduce_yourself only when development mode is on`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean("teamcity.development.mode") } returns false
 
@@ -155,7 +155,7 @@ class SettingsServiceTest {
     fun `default tools include rest put and delete only when brave mode is on`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_TOOLS_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns false
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns false
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         val offEnabled = settingsService.getEnabledToolNames()
@@ -172,7 +172,7 @@ class SettingsServiceTest {
     fun `default resources include only read only pipeline guide when brave mode is off`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns false
 
         val enabled = settingsService.getEnabledResourceNames()
@@ -184,7 +184,7 @@ class SettingsServiceTest {
     fun `default resources include only brave pipeline guide when brave mode is on`() {
         mockkStatic(TeamCityProperties::class)
         every { TeamCityProperties.getPropertyOrNull(MCP_RESOURCES_ENABLED) } returns null
-        every { TeamCityProperties.getBoolean(MCP_PIPELINE_TOGGLE) } returns true
+        every { TeamCityProperties.getBooleanOrTrue(MCP_PIPELINE_TOGGLE) } returns true
         every { TeamCityProperties.getBoolean(MCP_BRAVE_MODE_TOGGLE) } returns true
 
         val enabled = settingsService.getEnabledResourceNames()

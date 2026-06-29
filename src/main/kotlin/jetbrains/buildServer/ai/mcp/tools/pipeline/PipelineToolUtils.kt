@@ -4,6 +4,7 @@ import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiException
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiResponse
 import jetbrains.buildServer.ai.mcp.tools.rest.RestToolUtils
+import jetbrains.buildServer.ai.mcp.tools.rest.RestToolUtils.REST_PATH_PREFIX
 import org.springframework.util.AntPathMatcher
 
 internal object PipelineToolUtils {
@@ -16,7 +17,13 @@ internal object PipelineToolUtils {
 
     fun validatePath(path: String, queryParamName: String = "query"): McpToolResult? {
         if (!(path == PIPELINE_PATH_PREFIX || path.startsWith("$PIPELINE_PATH_PREFIX/"))) {
-            return McpToolResult.error("Path must start with $PIPELINE_PATH_PREFIX")
+            val errorMessage = buildString {
+                append("Path must start with $PIPELINE_PATH_PREFIX")
+                if (path.startsWith(REST_PATH_PREFIX)) {
+                    append(". Use rest tools for $REST_PATH_PREFIX calls.")
+                }
+            }
+            return McpToolResult.error(errorMessage)
         }
         if (path.contains("..")) {
             return McpToolResult.error("Path must not contain '..' segments")

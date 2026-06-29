@@ -31,6 +31,8 @@ class PipelineGuideResourceTest {
         assertTrue(content.contains("/app/pipeline"))
         assertTrue(content.contains("/app/rest/pipelines"))
         assertTrue(content.contains("alternative to classic TeamCity build chains"))
+        assertTrue(content.contains("locator=buildType:(id:"))
+        assertTrue(content.contains("fields=headBuildType(id)"))
     }
 
     @Test

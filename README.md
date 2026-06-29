@@ -53,7 +53,7 @@ Configuration is done via TeamCity internal properties
 | --- | --- | --- |
 | `teamcity.ai.mcp.enabled` | `true` | Master switch for the MCP server. |
 | `teamcity.ai.mcp.braveMode.enabled` | `false` | Enable destructive operations (PUT, DELETE, arbitrary POST). |
-| `teamcity.ai.mcp.pipeline.enabled` | `false` | Enable pipeline tools. |
+| `teamcity.ai.mcp.pipeline.enabled` | `true` | Enable pipeline tools. |
 | `teamcity.ai.mcp.tools.enabled` | *(see source)* | Comma-separated allowlist of tool names. Empty value disables all tools. |
 | `teamcity.ai.mcp.resources.enabled` | *(see source)* | Comma-separated allowlist of resource names. |
 | `teamcity.ai.mcp.rest.post.allowed.paths` | unset | Comma-separated REST API path prefixes the POST tool may call. |

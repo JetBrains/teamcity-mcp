@@ -274,7 +274,7 @@ path: /app/pipeline
 query: parentProjectExtId=MyProject
 ```
 
-A **full pipeline draft** — used for create, update, and most POST helper endpoints:
+A **full pipeline draft** — used directly for create and most POST helper endpoints (update nests it under a `pipeline` key, see below):
 
 ```json
 {
@@ -300,6 +300,15 @@ The response returns the created pipeline object including its assigned `id` (au
 
 ## Update
 
+Unlike create (which takes the bare draft), the update endpoint expects the draft **nested under a `pipeline` key**.
+A bare (unwrapped) body is rejected with a 400 error.
+
+```json
+{
+  "pipeline": { ...full pipeline draft... }
+}
+```
+
 **Always read the pipeline first** with `GET /app/pipeline/{id}`. The GET response vcsRoot looks like:
 
 ```json
@@ -321,18 +330,20 @@ Update with **external** VCS root (most common when no VCS connection is configu
 
 ```json
 {
-  "name": "My Pipeline",
-  "yaml": "...",
-  "vcsRoot": {
-    "externalVcsRootId": "<vcsRoot.id from GET response>",
-    "url": "https://example.com/org/repo.git",
-    "branch": "refs/heads/main",
-    "vcsName": "jetbrains.git"
-  },
-  "additionalVcsRoots": [],
-  "triggers": [],
-  "integrations": [],
-  "notifications": []
+  "pipeline": {
+    "name": "My Pipeline",
+    "yaml": "...",
+    "vcsRoot": {
+      "externalVcsRootId": "<vcsRoot.id from GET response>",
+      "url": "https://example.com/org/repo.git",
+      "branch": "refs/heads/main",
+      "vcsName": "jetbrains.git"
+    },
+    "additionalVcsRoots": [],
+    "triggers": [],
+    "integrations": [],
+    "notifications": []
+  }
 }
 ```
 
@@ -340,20 +351,29 @@ Update with **internal** VCS root (has a VCS connection):
 
 ```json
 {
-  "name": "My Pipeline",
-  "yaml": "...",
-  "vcsRoot": {
-    "url": "https://example.com/org/repo.git",
-    "branch": "refs/heads/main",
-    "vcsName": "jetbrains.git",
-    "connectionId": "MyConnection"
-  },
-  "additionalVcsRoots": [],
-  "triggers": [],
-  "integrations": [],
-  "notifications": []
+  "pipeline": {
+    "name": "My Pipeline",
+    "yaml": "...",
+    "vcsRoot": {
+      "url": "https://example.com/org/repo.git",
+      "branch": "refs/heads/main",
+      "vcsName": "jetbrains.git",
+      "isPrivate": true,
+      "connectionId": "MyConnection",
+      "username": "<account login>"
+    },
+    "additionalVcsRoots": [],
+    "triggers": [],
+    "integrations": [],
+    "notifications": []
+  }
 }
 ```
+
+A private root (`isPrivate: true`) bound to a `connectionId` requires a non-empty `username` (the account login);
+both come from `GET /app/pipeline/provider/vcs`. Without the `username` the update is rejected with
+`400 — Parameter 'username' is required.` (A public root — `isPrivate` false/omitted
+— needs no credentials.)
 
 If an update returns 500, the most common cause is a missing `externalVcsRootId` for external VCS roots.
 
@@ -394,7 +414,7 @@ All POST helper endpoints (compatibility, schema, job-descriptions, etc.) requir
 | Endpoint | Purpose | Body |
 |----------|---------|------|
 | `/app/pipeline?parentProjectExtId=...` | Create pipeline | Full pipeline draft |
-| `/app/pipeline/{id}` | Update pipeline | Full pipeline draft |
+| `/app/pipeline/{id}` | Update pipeline | Draft nested under `pipeline`: `{ "pipeline": <draft> }` |
 | `/app/pipeline/{id}/compatibility/agents` | Check agent compatibility | Full pipeline draft |
 | `/app/pipeline/{id}/compatibility/agents/{jobId}` | Check per-job compatibility | Full pipeline draft |
 | `/app/pipeline/{id}/job-descriptions` | Job descriptions | Full pipeline draft |

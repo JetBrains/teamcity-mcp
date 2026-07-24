@@ -12,7 +12,7 @@ RUN apt-get update && \
     apt-get purge -y --auto-remove gnupg && \
     rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @openai/codex@0.104.0
+RUN npm install -g @openai/codex@0.145.0
 
 RUN useradd -m -s /bin/bash agent
 USER agent

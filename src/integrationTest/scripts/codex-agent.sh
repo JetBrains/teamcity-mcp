@@ -49,6 +49,7 @@ cmd_run_prompt() {
         -e "TC_BEARER_TOKEN=$bearer_token" \
         "$container" \
         codex exec \
+            --model gpt-5.6-luna \
             --dangerously-bypass-approvals-and-sandbox \
             --skip-git-repo-check \
             --json \

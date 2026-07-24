@@ -66,9 +66,9 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
     fun `agent discovers TeamCity MCP tools`() {
         val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
-                "List all available MCP tools. For each tool print exactly one line:\n" +
+                "List all available MCP tools from connected servers. For each tool print exactly one line:\n" +
                     "TOOL: <name> - <description>\n" +
-                    "Do not call any tool. Only list them.",
+                    "Do not call any of the server tools. Only list them.",
                 findApiKey()!!, serverConfig.bearerToken))
 
         output.dump("tool discovery")

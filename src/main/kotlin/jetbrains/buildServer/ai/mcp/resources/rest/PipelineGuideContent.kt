@@ -253,7 +253,7 @@ Note: many "read-like" helpers (compatibility checks, schema generation) are POS
 
 Step field names map to TeamCity runner parameters. Key rules:
 - Every step MUST have a `type` field — omitting it causes a parse error.
-- Valid step types include: `script`, `gradle`, `maven`, `dotnet`, `docker`, `node-js`, etc. Use `POST /app/pipeline/schema/generate?pipelineId=...` to get the full list. **Warning:** unrecognized type values (e.g. `command-line`) are silently accepted but produce a build configuration with zero steps — the pipeline will appear valid but builds will never run. Always verify the type against the schema.
+- Valid step types include: `script`, `gradle`, `maven`, `dotnet`, `docker`, `node-js`, etc. Use `GET /app/pipeline/schema/complete` to get the full schema with all enabled runners and build features merged in. If that returns 404 (older server version), fall back to `POST /app/pipeline/schema/generate?pipelineId=...`. **Warning:** unrecognized type values (e.g. `command-line`) are silently accepted but produce a build configuration with zero steps — the pipeline will appear valid but builds will never run. Always verify the type against the schema.
 - For command-line steps, use `type: script` with field `script-content` (NOT `script`). Wrong name → empty runner parameter → zero compatible agents.
 - Use `POST /app/pipeline/{id}/compatibility/agents` to verify steps are compatible with available agents before triggering a run. This endpoint requires the full pipeline draft as the request body (it does not use the stored pipeline definition).
 
@@ -447,7 +447,7 @@ If an update returns 500, the most common cause is a missing `externalVcsRootId`
 
 ## POST — via `teamcity_pipeline_post`
 
-All POST helper endpoints (compatibility, schema, job-descriptions, etc.) require the full pipeline draft as the request body — they do not read the stored pipeline definition. Sending an empty body `{}` returns 500.
+Most POST helper endpoints (compatibility, job-descriptions, etc.) require the full pipeline draft as the request body — they do not read the stored pipeline definition, and sending an empty body `{}` returns 500. Exception: on newer server versions, `schema/generate` ignores its body entirely (see row below).
 
 | Endpoint | Purpose | Body |
 |----------|---------|------|

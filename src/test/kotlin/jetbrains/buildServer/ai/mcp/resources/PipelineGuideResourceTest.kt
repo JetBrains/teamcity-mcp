@@ -33,6 +33,8 @@ class PipelineGuideResourceTest {
         assertTrue(content.contains("alternative to classic TeamCity build chains"))
         assertTrue(content.contains("locator=buildType:(id:"))
         assertTrue(content.contains("fields=headBuildType(id)"))
+        assertTrue(content.contains("/app/pipeline/schema/base"))
+        assertTrue(content.contains("/app/pipeline/schema/complete"))
     }
 
     @Test
@@ -43,5 +45,7 @@ class PipelineGuideResourceTest {
         assertTrue(content.contains("teamcity_pipeline_delete"))
         assertTrue(content.contains("teamcity.ai.mcp.pipeline.post.allowed.paths"))
         assertTrue(content.contains("/app/pipeline/schema/generate"))
+        assertTrue(content.contains("/app/pipeline/schema/base"))
+        assertTrue(content.contains("/app/pipeline/schema/complete"))
     }
 }

@@ -66,6 +66,8 @@ Key GET endpoints:
 - `GET /app/pipeline/provider/vcs...` endpoints discover providers and repositories
 - `GET /app/rest/pipelines/{id}/branches` lists branches
 - `GET /app/rest/pipelines/{id}/run/{runId}` reads a pipeline run
+- `GET /app/pipeline/schema/base` returns the base pipeline JSON schema (may return 404 on some versions) use for static validation or tooling decoupled from a live server's plugin state without runners or features; `descriptions=false` strips description annotations
+- `GET /app/pipeline/schema/complete` returns the complete schema with all enabled runners and build features merged in (may return 404 on some versions) use for client integrations needing full, server-aware runner and feature autocomplete; `descriptions=false` strips description annotations
 
 ---
 
@@ -128,6 +130,16 @@ query: parentProjectExtId=MyProject
 
 ```
 path: /app/pipeline/provider/jdk
+```
+
+```
+path: /app/pipeline/schema/base
+query: descriptions=false
+```
+
+```
+path: /app/pipeline/schema/complete
+query: descriptions=false
 ```
 
 ## 5. Inspect runtime-oriented pipeline helpers
@@ -241,7 +253,7 @@ Note: many "read-like" helpers (compatibility checks, schema generation) are POS
 
 Step field names map to TeamCity runner parameters. Key rules:
 - Every step MUST have a `type` field — omitting it causes a parse error.
-- Valid step types include: `script`, `gradle`, `maven`, `dotnet`, `docker`, `node-js`, etc. Use `POST /app/pipeline/schema/generate?pipelineId=...` to get the full list. **Warning:** unrecognized type values (e.g. `command-line`) are silently accepted but produce a build configuration with zero steps — the pipeline will appear valid but builds will never run. Always verify the type against the schema.
+- Valid step types include: `script`, `gradle`, `maven`, `dotnet`, `docker`, `node-js`, etc. Use `GET /app/pipeline/schema/complete` to get the full schema with all enabled runners and build features merged in. If that returns 404 (older server version), fall back to `POST /app/pipeline/schema/generate?pipelineId=...`. **Warning:** unrecognized type values (e.g. `command-line`) are silently accepted but produce a build configuration with zero steps — the pipeline will appear valid but builds will never run. Always verify the type against the schema.
 - For command-line steps, use `type: script` with field `script-content` (NOT `script`). Wrong name → empty runner parameter → zero compatible agents.
 - Use `POST /app/pipeline/{id}/compatibility/agents` to verify steps are compatible with available agents before triggering a run. This endpoint requires the full pipeline draft as the request body (it does not use the stored pipeline definition).
 
@@ -430,10 +442,12 @@ If an update returns 500, the most common cause is a missing `externalVcsRootId`
 | `/app/pipeline/provider/vcs/{connId}/repositories?parentProjectExtId=...&q=...` | Search repos |
 | `/app/pipeline/provider/vcs/{connId}/capabilities?parentProjectExtId=...` | Connection capabilities |
 | `/app/pipeline/provider/jdk` | Available JDKs |
+| `/app/pipeline/schema/base?descriptions=true\|false` | Base pipeline JSON schema (may return 404 on some versions); `descriptions=false` strips JSON-Schema description annotations for a smaller payload |
+| `/app/pipeline/schema/complete?descriptions=true\|false` | Complete schema with all enabled runners and build features merged in (may return 404 on some versions); `descriptions=false` strips JSON-Schema description annotations for a smaller payload |
 
 ## POST — via `teamcity_pipeline_post`
 
-All POST helper endpoints (compatibility, schema, job-descriptions, etc.) require the full pipeline draft as the request body — they do not read the stored pipeline definition. Sending an empty body `{}` returns 500.
+Most POST helper endpoints (compatibility, job-descriptions, etc.) require the full pipeline draft as the request body — they do not read the stored pipeline definition, and sending an empty body `{}` returns 500. Exception: on newer server versions, `schema/generate` ignores its body entirely (see row below).
 
 | Endpoint | Purpose | Body |
 |----------|---------|------|
@@ -443,7 +457,7 @@ All POST helper endpoints (compatibility, schema, job-descriptions, etc.) requir
 | `/app/pipeline/{id}/compatibility/agents/{jobId}` | Check per-job compatibility | Full pipeline draft |
 | `/app/pipeline/{id}/job-descriptions` | Job descriptions | Full pipeline draft |
 | `/app/pipeline/{id}/kotlinDsl` | Generate Kotlin DSL | Full pipeline draft |
-| `/app/pipeline/schema/generate?pipelineId=...` | YAML schema | Full pipeline draft |
+| `/app/pipeline/schema/generate` | Returns the base schema with descriptions — equivalent to `GET /schema/base`; `pipelineId`, `parentProjectExtId`, and the request body are ignored | Any (ignored) |
 | `/app/pipeline/repository/branches` | Discover branches (requires VCS connectivity) | Full pipeline draft |
 | `/app/pipeline/repository/testConnection` | Test VCS connection (requires VCS connectivity) | Full pipeline draft |
 | `/app/pipeline/repository/checkVersionedSettings` | Check versioned settings (requires VCS connectivity) | Full pipeline draft |

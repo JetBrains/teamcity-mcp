@@ -66,8 +66,8 @@ Key GET endpoints:
 - `GET /app/pipeline/provider/vcs...` endpoints discover providers and repositories
 - `GET /app/rest/pipelines/{id}/branches` lists branches
 - `GET /app/rest/pipelines/{id}/run/{runId}` reads a pipeline run
-- `GET /app/pipeline/schema/base` returns the base pipeline JSON schema (no runners or features; may return 404 on some versions); `descriptions=false` strips description annotations
-- `GET /app/pipeline/schema/complete` returns the complete schema with all enabled runners and build features merged in (may return 404 on some versions); `descriptions=false` strips description annotations
+- `GET /app/pipeline/schema/base` returns the base pipeline JSON schema (may return 404 on some versions) use for static validation or tooling decoupled from a live server's plugin state without runners or features; `descriptions=false` strips description annotations
+- `GET /app/pipeline/schema/complete` returns the complete schema with all enabled runners and build features merged in (may return 404 on some versions) use for client integrations needing full, server-aware runner and feature autocomplete; `descriptions=false` strips description annotations
 
 ---
 

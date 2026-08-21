@@ -177,7 +177,8 @@ AUTH_SETTINGS_UPDATED=$(printf '%s' "$AUTH_SETTINGS" \
 curl -sf -u ":${SUPER_TOKEN}" -X PUT "${TC_BASE_URL}/httpAuth/app/rest/server/authSettings" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
-    -d $AUTH_SETTINGS_UPDATED
+    -d "$AUTH_SETTINGS_UPDATED"
+echo ""
 echo "Per-project permissions enabled"
 
 echo "=== Creating admin user ==="

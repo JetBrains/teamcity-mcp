@@ -162,6 +162,25 @@ echo "Super user token obtained"
 
 # ── Create admin user ────────────────────────────────────────────────────────
 
+echo "=== Enabling per-project permissions (to allow user creation) ==="
+
+AUTH_SETTINGS=$(curl -sf -u ":${SUPER_TOKEN}" -X GET "${TC_BASE_URL}/httpAuth/app/rest/server/authSettings" \
+    -H "Accept: application/json")
+if [ -z "$AUTH_SETTINGS" ]; then
+    echo "Failed to read auth settings"
+    exit 1
+fi
+
+AUTH_SETTINGS_UPDATED=$(printf '%s' "$AUTH_SETTINGS" \
+    | sed -E 's/("perProjectPermissions"[[:space:]]*:[[:space:]]*)("?(true|false)"?)/\1true/')
+
+curl -sf -u ":${SUPER_TOKEN}" -X PUT "${TC_BASE_URL}/httpAuth/app/rest/server/authSettings" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json" \
+    -d "$AUTH_SETTINGS_UPDATED"
+echo ""
+echo "Per-project permissions enabled"
+
 echo "=== Creating admin user ==="
 curl -sf -u ":${SUPER_TOKEN}" -X POST "${TC_BASE_URL}/httpAuth/app/rest/users" \
     -H "Content-Type: application/json" \

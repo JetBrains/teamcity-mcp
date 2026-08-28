@@ -9,30 +9,30 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.context.SecurityContextHolder
 import org.jetbrains.teamcity.fus.domain.model.events.ai.McpServerEventsGroup.*
 
 class FusMcpEventHandlerTest {
 
     private lateinit var fusRegistry: FusRegistry
     private lateinit var handler: FusMcpEventHandler
+    private lateinit var securityContext: SecurityContextImpl
 
     @BeforeEach
     fun setUp() {
         fusRegistry = mockk(relaxed = true)
+        securityContext = SecurityContextImpl(ServerResponsibilityImpl())
         handler = object : FusMcpEventHandler(
             fusRegistry,
-            SecurityContextImpl(ServerResponsibilityImpl())
+            securityContext
         ) {
             override fun areFusEventClassesPresent(): Boolean = true
         }
-        SecurityContextHolder.clearContext()
+        securityContext.clearContext()
     }
 
     @AfterEach
     fun tearDown() {
-        SecurityContextHolder.clearContext()
+        securityContext.clearContext()
         unmockkAll()
     }
 
@@ -40,8 +40,7 @@ class FusMcpEventHandlerTest {
         val user = mockk<SUser>()
         every { user.id } returns userId
         every { user.associatedUser } returns user
-        val auth = UsernamePasswordAuthenticationToken(user, null)
-        SecurityContextHolder.getContext().authentication = auth
+        securityContext.setAuthorityHolder(user)
     }
 
     @Nested
@@ -220,9 +219,8 @@ class FusMcpEventHandlerTest {
         }
 
         @Test
-        fun `uses empty string when authentication principal is not SUser`() {
-            val auth = UsernamePasswordAuthenticationToken("string-principal", null)
-            SecurityContextHolder.getContext().authentication = auth
+        fun `uses empty string when authority has no associated user`() {
+            securityContext.setAuthorityHolder(SecurityContextImpl.NO_PERMISSIONS)
 
             handler.onEvent(McpEvent.MessageReceived("s1", "ping"))
 

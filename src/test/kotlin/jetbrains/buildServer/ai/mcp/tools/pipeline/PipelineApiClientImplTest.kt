@@ -9,6 +9,7 @@ import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletRequest
 import jetbrains.buildServer.maintenance.TeamCityDispatcherServlet
 import jetbrains.buildServer.maintenance.WebDispatcherServlet
+import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.users.SUser
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
@@ -18,7 +19,7 @@ import org.junit.jupiter.api.Test
 
 class PipelineApiClientImplTest {
     private val fakeHttpRequestsFactory = mockk<FakeHttpRequestsFactory>()
-    private val executionContext = McpToolExecutionContext()
+    private val executionContext = McpToolExecutionContext(mockk<SecurityContextEx>(relaxed = true))
     private val user = mockk<SUser>(relaxed = true)
 
     private val client = PipelineApiClientImpl(executionContext, fakeHttpRequestsFactory)

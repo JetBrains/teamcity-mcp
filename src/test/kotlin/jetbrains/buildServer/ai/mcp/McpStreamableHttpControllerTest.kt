@@ -37,8 +37,8 @@ class McpStreamableHttpControllerTest {
         sessionManager = mockk(relaxed = true)
         serverConfigurator = mockk()
         eventBus = mockk(relaxed = true)
-        toolExecutionContext = McpToolExecutionContext()
         securityContext = mockk(relaxed = true)
+        toolExecutionContext = McpToolExecutionContext(securityContext)
 
         val authorityHolder = mockk<AuthorityHolder>(relaxed = true)
         every { authorityHolder.associatedUser } returns null

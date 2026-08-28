@@ -12,7 +12,6 @@ import jetbrains.buildServer.users.SUser
 import jetbrains.buildServer.util.NamedDaemonThreadFactory
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerializationException
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -168,7 +167,7 @@ class McpStreamableHttpController(
         // should be captured outside the coroutine!
         val capturedUser = securityContext.authorityHolder as? SUser
 
-        val capturedSecurityContext = SecurityContextHolder.getContext()
+        val capturedSecurityContext = securityContext.captureContext()
         val capturedRequestData = captureRequestData(servletRequest)
         job.set(launch(CoroutineName(coroutineName)) {
             try {

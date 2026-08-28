@@ -7,6 +7,7 @@ import jetbrains.buildServer.controllers.BaseController
 import jetbrains.buildServer.controllers.fakes.FakeHttpRequestsFactory
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletRequest
 import jetbrains.buildServer.controllers.fakes.FakeHttpServletResponse
+import jetbrains.buildServer.serverSide.SecurityContextEx
 import jetbrains.buildServer.users.SUser
 import jetbrains.spring.web.UrlMapping
 import kotlinx.coroutines.runBlocking
@@ -14,15 +15,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.springframework.security.core.Authentication
-import org.springframework.security.core.context.SecurityContext
-import org.springframework.security.core.context.SecurityContextHolder
 
 class RestApiClientImplTest {
 
     private val fakeHttpRequestsFactory = mockk<FakeHttpRequestsFactory>()
     private val urlMapping = mockk<UrlMapping>()
-    private val executionContext = McpToolExecutionContext()
+    private val securityContext = mockk<SecurityContextEx>(relaxed = true)
+    private val executionContext = McpToolExecutionContext(securityContext)
     private val user = mockk<SUser>(relaxed = true)
 
     private val client = RestApiClientImpl(
@@ -187,17 +186,17 @@ class RestApiClientImplTest {
 
     @Test
     fun `controller sees propagated security context`() {
-        val authentication = mockk<Authentication>(relaxed = true)
-        val securityContext = mockk<SecurityContext>()
-        every { securityContext.authentication } returns authentication
+        val capturedContext = mockk<SecurityContextEx.ContextState>()
+        var contextApplied = false
+        every { securityContext.restoreContext(capturedContext) } answers { contextApplied = true }
 
         setupController { response ->
-            assertEquals(authentication, SecurityContextHolder.getContext().authentication)
+            assertTrue(contextApplied)
             response.status = 200
         }
 
         runBlocking {
-            executionContext.withOperationContext(user = user, capturedSecurityContext = securityContext) {
+            executionContext.withOperationContext(user = user, capturedSecurityContext = capturedContext) {
                 client.get("/app/rest/server", "")
             }
         }

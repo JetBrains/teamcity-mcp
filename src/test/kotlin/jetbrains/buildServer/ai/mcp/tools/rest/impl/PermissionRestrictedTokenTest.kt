@@ -25,9 +25,6 @@ import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.springframework.security.core.Authentication
-import org.springframework.security.core.context.SecurityContext
-import org.springframework.security.core.context.SecurityContextHolder
 
 /**
  * Verifies that a permission-restricted token user is correctly propagated
@@ -74,7 +71,7 @@ class PermissionRestrictedTokenTest {
          * Caller is responsible for calling [McpStreamableHttpController.destroy] when done.
          */
         private fun createControllerWithSpiedContext(
-            spiedContext: McpToolExecutionContext = spyk(McpToolExecutionContext())
+            spiedContext: McpToolExecutionContext = spyk(McpToolExecutionContext(securityContext))
         ): Pair<McpStreamableHttpController, McpToolExecutionContext> {
             val controller = McpStreamableHttpController(
                 settingsService = settingsService,
@@ -155,7 +152,8 @@ class PermissionRestrictedTokenTest {
 
         private val fakeHttpRequestsFactory = mockk<FakeHttpRequestsFactory>()
         private val urlMapping = mockk<UrlMapping>()
-        private val executionContext = McpToolExecutionContext()
+        private val securityContext = mockk<SecurityContextEx>(relaxed = true)
+        private val executionContext = McpToolExecutionContext(securityContext)
         private val client = RestApiClientImpl(executionContext, fakeHttpRequestsFactory, urlMapping)
 
         /**
@@ -244,18 +242,16 @@ class PermissionRestrictedTokenTest {
 
         @Test
         fun `security context is propagated alongside restricted user`() {
-            val mockAuthentication = mockk<Authentication>(relaxed = true)
-            val mockSecurityContext = mockk<SecurityContext>()
-            every { mockSecurityContext.authentication } returns mockAuthentication
-
-            var authOnRequest: Authentication? = null
+            val capturedContext = mockk<SecurityContextEx.ContextState>()
+            var contextApplied = false
+            every { securityContext.restoreContext(capturedContext) } answers { contextApplied = true }
             val fakeRequest = FakeHttpServletRequest()
             every { fakeHttpRequestsFactory.get(any(), any()) } returns fakeRequest
 
             val controller = mockk<BaseController>()
             every { urlMapping.handlerMap } returns mapOf("/app/rest/**" to controller)
             every { controller.handleRequestInternal(any(), any()) } answers {
-                authOnRequest = SecurityContextHolder.getContext().authentication
+                assertEquals(true, contextApplied)
                 secondArg<FakeHttpServletResponse>().status = 200
                 null
             }
@@ -263,14 +259,11 @@ class PermissionRestrictedTokenTest {
             runBlocking {
                 executionContext.withOperationContext(
                     user = restrictedUser,
-                    capturedSecurityContext = mockSecurityContext
+                    capturedSecurityContext = capturedContext
                 ) {
                     client.get("/app/rest/projects", "")
                 }
             }
-
-            assertSame(mockAuthentication, authOnRequest,
-                "SecurityContext authentication must be propagated to the controller thread")
         }
 
         @Test

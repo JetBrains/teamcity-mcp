@@ -64,6 +64,9 @@ private class RequestDataElement(
 /**
  * Propagates TeamCity security context across coroutine suspensions using ThreadContextElement.
  * Saves the previous context, sets the provided one for the duration of the coroutine, then restores it.
+ * Do not call [SecurityContextEx.setAuthorityHolder] from suspending code:
+ * the captured context is restored after suspension.
+ * Use `SecurityContextEx.runAs` methods for synchronous authority changes instead.
  */
 private class SecurityContextElement(
     private val securityContext: SecurityContextEx,

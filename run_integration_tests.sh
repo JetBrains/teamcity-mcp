@@ -6,7 +6,8 @@
 #   TC_DATA_PATH=/path/to/.BuildServer ./run_integration_tests.sh
 #
 #   TC_DATA_PATH is optional; only needed for tests that toggle TC internal
-#   properties at runtime (e.g. BraveModeE2eTest). Skipped if unset.
+#   properties at runtime (BraveModeIntegrationTest, ClaudeBraveModeE2eTest).
+#   Those tests are skipped if it is unset.
 #
 # Mode 2 — Full lifecycle (setup server from dist, run tests, teardown):
 #   TC_DIST=~/Downloads/TeamCity-222175.tar.gz ./run_integration_tests.sh

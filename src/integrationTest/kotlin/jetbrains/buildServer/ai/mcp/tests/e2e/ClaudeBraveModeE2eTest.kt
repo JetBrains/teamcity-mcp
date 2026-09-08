@@ -1,7 +1,7 @@
 package jetbrains.buildServer.ai.mcp.tests.e2e
 
 import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
-import jetbrains.buildServer.ai.mcp.framework.e2e.BraveModeControl
+import jetbrains.buildServer.ai.mcp.framework.BraveModeControl
 import jetbrains.buildServer.ai.mcp.framework.e2e.ScriptRunner
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -17,10 +17,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
  *  2. Brave mode — property enabled; the agent must see the tool, call it, and
  *     leave the scratch project deleted.
  *
- * Between the two tests the property is flipped by rewriting
- * `$TC_DATA_PATH/config/internal.properties`; the test polls the MCP tool list
- * until the server has picked up the change. A fresh Claude CLI invocation per
- * test re-opens the MCP session, so no explicit tool-reload call is needed.
+ * Between the two tests the property is flipped via `setBraveMode`, which rewrites
+ * `$TC_DATA_PATH/config/internal.properties` and polls the MCP tool list until the
+ * server has picked up the change. A fresh Claude CLI invocation per test re-opens
+ * the MCP session, so no explicit tool-reload call is needed.
  *
  * Prerequisites (in addition to other Claude e2e tests):
  *  - `TC_DATA_PATH` system property / env var pointing to the TeamCity data
@@ -70,8 +70,7 @@ class ClaudeBraveModeE2eTest : McpIntegrationTestBase() {
     @Test
     @Order(1)
     fun `safe mode hides teamcity_rest_delete - agent cannot delete project`() {
-        BraveModeControl.setBraveMode(false)
-        waitForDeleteToolVisible(false)
+        setBraveMode(false)
         createProject(scratchProjectId)
 
         val output = scripts.runWithRetry(
@@ -108,8 +107,7 @@ class ClaudeBraveModeE2eTest : McpIntegrationTestBase() {
     @Order(2)
     fun `brave mode exposes teamcity_rest_delete - agent deletes project`() {
         if (!projectExists(scratchProjectId)) createProject(scratchProjectId)
-        BraveModeControl.setBraveMode(true)
-        waitForDeleteToolVisible(true)
+        setBraveMode(true)
 
         val output = scripts.runWithRetry(
             "claude-agent.sh",
@@ -131,29 +129,6 @@ class ClaudeBraveModeE2eTest : McpIntegrationTestBase() {
         assertFalse(
             projectExists(scratchProjectId),
             "scratch project '$scratchProjectId' must be gone after brave-mode delete"
-        )
-    }
-
-    /**
-     * Poll the MCP tool list until `teamcity_rest_delete` visibility matches
-     * [expectVisible]. Accounts for TC internal-properties refresh latency (~5–10s).
-     */
-    private fun waitForDeleteToolVisible(expectVisible: Boolean) {
-        val deadline = System.currentTimeMillis() + 30_000
-        while (System.currentTimeMillis() < deadline) {
-            val visible = mcpClient().use { client ->
-                var seen = false
-                client.withSession {
-                    seen = listTools().any { it.name == "teamcity_rest_delete" }
-                }
-                seen
-            }
-            if (visible == expectVisible) return
-            Thread.sleep(1000)
-        }
-        throw AssertionError(
-            "teamcity_rest_delete visibility did not reach $expectVisible within 30s. " +
-                "Check that TC is reloading internal.properties from TC_DATA_PATH."
         )
     }
 

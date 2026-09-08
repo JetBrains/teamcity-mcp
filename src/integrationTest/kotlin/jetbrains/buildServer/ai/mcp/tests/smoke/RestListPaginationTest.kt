@@ -1,7 +1,6 @@
 package jetbrains.buildServer.ai.mcp.tests.smoke
 
 import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
-import jetbrains.buildServer.ai.mcp.framework.TestMcpClient
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -429,15 +428,5 @@ class RestListPaginationTest : McpIntegrationTestBase() {
             assertTrue(count <= 5, "Should return at most 5 investigations, got $count")
             println("  ✓ investigations: count:5 → $count item(s)")
         }
-    }
-
-    // ------------------------------------------------------------------
-    // Helper: extract body from tool result
-    // ------------------------------------------------------------------
-
-    private fun extractBody(result: TestMcpClient.ToolResult): JsonObject {
-        val text = result.content.first().text
-        val envelope = Json.parseToJsonElement(text).jsonObject
-        return envelope["body"]?.jsonObject ?: JsonObject(emptyMap())
     }
 }

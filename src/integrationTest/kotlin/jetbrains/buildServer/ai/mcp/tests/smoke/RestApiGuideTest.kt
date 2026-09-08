@@ -781,12 +781,6 @@ class RestApiGuideTest : McpIntegrationTestBase() {
                 && !name.contains('<') && !name.contains('>')
                 && !name.contains(':')
 
-    private fun extractBody(result: TestMcpClient.ToolResult): JsonObject {
-        val text = result.content.first().text
-        val envelope = Json.parseToJsonElement(text).jsonObject
-        return envelope["body"]?.jsonObject ?: JsonObject(emptyMap())
-    }
-
     private fun extractMeta(result: TestMcpClient.ToolResult): JsonObject {
         val text = result.content.first().text
         val envelope = Json.parseToJsonElement(text).jsonObject

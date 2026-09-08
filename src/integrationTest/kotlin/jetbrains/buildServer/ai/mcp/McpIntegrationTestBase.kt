@@ -1,5 +1,6 @@
 package jetbrains.buildServer.ai.mcp
 
+import jetbrains.buildServer.ai.mcp.framework.BraveModeControl
 import jetbrains.buildServer.ai.mcp.framework.TcServerConfig
 import jetbrains.buildServer.ai.mcp.framework.TestMcpClient
 import kotlinx.serialization.json.*
@@ -16,6 +17,8 @@ import java.time.Duration
  * Reads the target server from system properties or environment variables:
  *   - `TC_SERVER_URL`   — e.g. "http://localhost:8111"  (required)
  *   - `TC_SERVER_TOKEN` — permanent Bearer token         (required)
+ *   - `TC_SERVER_RESTRICTED_TOKEN` — permission-restricted Bearer token (permission tests only)
+ *   - `TC_DATA_PATH`    — TeamCity data directory        (brave-mode tests only)
  *
  * Run with:
  * ```
@@ -41,6 +44,58 @@ abstract class McpIntegrationTestBase {
 
     /** Creates a fresh [TestMcpClient] bound to the configured server. */
     fun mcpClient(): TestMcpClient = TestMcpClient(serverConfig)
+
+    /**
+     * Creates a fresh [TestMcpClient] authenticated with the permission-restricted token
+     * (`TC_SERVER_RESTRICTED_TOKEN`) — an admin token limited to `view_project` on the
+     * `McpPermissionVisible` fixture, see `scripts/setup-test-server.sh`.
+     */
+    fun restrictedMcpClient(): TestMcpClient {
+        val restrictedToken = prop("TC_SERVER_RESTRICTED_TOKEN")
+            ?: error("TC_SERVER_RESTRICTED_TOKEN system property or env var is required")
+        return TestMcpClient(TcServerConfig(baseUrl = serverConfig.baseUrl, bearerToken = restrictedToken))
+    }
+
+    /**
+     * Flips `teamcity.ai.mcp.braveMode.enabled` and waits until the MCP tool list reflects
+     * the change. Requires `TC_DATA_PATH` — call [BraveModeControl.assumeAvailable] first.
+     */
+    protected fun setBraveMode(enabled: Boolean) {
+        if (BraveModeControl.readBraveMode() != enabled.toString()) {
+            BraveModeControl.setBraveMode(enabled)
+        }
+        awaitToolVisibility(BRAVE_ONLY_TOOL, enabled)
+    }
+
+    /**
+     * Polls the MCP tool list until [toolName]'s visibility matches [expectVisible].
+     * Accounts for TeamCity's internal-properties refresh latency (~5-10s).
+     */
+    protected fun awaitToolVisibility(toolName: String, expectVisible: Boolean) {
+        val deadline = System.currentTimeMillis() + 30_000
+        while (true) {
+            val visible = mcpClient().use { client ->
+                var seen = false
+                client.withSession { seen = listTools().any { it.name == toolName } }
+                seen
+            }
+            if (visible == expectVisible) return
+            if (System.currentTimeMillis() > deadline) {
+                throw AssertionError(
+                    "'$toolName' visibility did not reach $expectVisible within 30s. " +
+                        "Check that TC is reloading internal.properties from TC_DATA_PATH."
+                )
+            }
+            Thread.sleep(1000)
+        }
+    }
+
+    /** Unwraps the `body` object from the JSON envelope the REST tools return. */
+    protected fun extractBody(result: TestMcpClient.ToolResult): JsonObject {
+        val text = result.content.first().text
+        val envelope = Json.parseToJsonElement(text).jsonObject
+        return envelope["body"]?.jsonObject ?: JsonObject(emptyMap())
+    }
 
     protected fun ensureSeededPipeline(): String {
         val existing = listPipelines().firstOrNull {
@@ -128,7 +183,7 @@ abstract class McpIntegrationTestBase {
         }
     }
 
-    private fun prop(name: String): String? = System.getProperty(name) ?: System.getenv(name)
+    protected fun prop(name: String): String? = System.getProperty(name) ?: System.getenv(name)
 
     private fun sendTeamCityRequest(
         path: String,
@@ -153,5 +208,14 @@ abstract class McpIntegrationTestBase {
         }
 
         return http.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+    }
+
+    companion object {
+        /**
+         * A tool that exists only while brave mode is on — used as the probe for
+         * [setBraveMode]. Tool names are `internal` in the plugin module, so tests
+         * spell them out.
+         */
+        private const val BRAVE_ONLY_TOOL = "teamcity_rest_delete"
     }
 }

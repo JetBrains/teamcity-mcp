@@ -1,11 +1,7 @@
 package jetbrains.buildServer.ai.mcp.tests.smoke
 
 import jetbrains.buildServer.ai.mcp.McpIntegrationTestBase
-import jetbrains.buildServer.ai.mcp.framework.TcServerConfig
-import jetbrains.buildServer.ai.mcp.framework.TestMcpClient
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -51,7 +47,7 @@ class PermissionRestrictedTokenTest : McpIntegrationTestBase() {
 
     @Test
     fun `teamcity rest get respects permission restricted token`() {
-        restrictedClient().withSession {
+        restrictedMcpClient().withSession {
             val projectsResult = callTool("teamcity_rest_get", mapOf(
                 "path" to "/app/rest/projects",
                 "query" to "locator=parentProject:(id:_Root),count:100&fields=project(id,name)"
@@ -80,20 +76,6 @@ class PermissionRestrictedTokenTest : McpIntegrationTestBase() {
             assertFalse(HIDDEN_BUILD_TYPE_ID in buildTypeIds, "Hidden build type must not be returned, got $buildTypeIds")
             assertEquals(setOf(VISIBLE_PROJECT_ID), buildTypeProjectIds, "Restricted token should only expose build types from the visible project")
         }
-    }
-
-    private fun restrictedClient(): TestMcpClient {
-        val restrictedToken = prop("TC_SERVER_RESTRICTED_TOKEN")
-            ?: error("TC_SERVER_RESTRICTED_TOKEN system property or env var is required")
-        return TestMcpClient(TcServerConfig(baseUrl = serverConfig.baseUrl, bearerToken = restrictedToken))
-    }
-
-    private fun prop(name: String): String? = System.getProperty(name) ?: System.getenv(name)
-
-    private fun extractBody(result: TestMcpClient.ToolResult): JsonObject {
-        val text = result.content.first().text
-        val envelope = Json.parseToJsonElement(text).jsonObject
-        return envelope["body"]?.jsonObject ?: JsonObject(emptyMap())
     }
 
     companion object {

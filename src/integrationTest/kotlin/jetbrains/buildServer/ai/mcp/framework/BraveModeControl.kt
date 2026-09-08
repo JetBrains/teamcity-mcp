@@ -1,4 +1,4 @@
-package jetbrains.buildServer.ai.mcp.framework.e2e
+package jetbrains.buildServer.ai.mcp.framework
 
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
@@ -6,11 +6,12 @@ import java.util.Properties
 
 /**
  * Toggles the `teamcity.ai.mcp.braveMode.enabled` internal property at runtime
- * for e2e tests that need to flip between safe and brave modes.
+ * for tests that need to flip between safe and brave modes.
  *
  * Writes `$TC_DATA_PATH/config/internal.properties`. TeamCity watches this file
  * and reloads properties within ~10s of modification; callers should poll the
- * MCP tool list for the resulting change rather than sleeping blindly.
+ * MCP tool list for the resulting change rather than sleeping blindly —
+ * `McpIntegrationTestBase.setBraveMode` does both.
  *
  * Requires the `TC_DATA_PATH` system property or env var pointing to the
  * TeamCity **data** directory (the one containing `config/`) — not the

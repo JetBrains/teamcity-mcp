@@ -94,25 +94,28 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
     @Test
     @Order(2)
     fun `agent can list tools and call one in a single turn`() {
-        val output = runJuniePrompt(
-            "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
-                "2. Then call \"introduce_yourself\" tool with name \"Junie\".\n" +
-                "3. Print the tool's response on a single line starting with the prefix: " +
-                "RESULT: <text returned by the tool>\n" +
-                "Do not skip any of the steps. The final line of your reply MUST be the 'RESULT:' line.")
+        // Junie does not follow prompt instructions reliably, it may miss the expected output (e.g. skip the tool call).
+        retryOnAssertionFailure("combined prompt") {
+            val output = runJuniePrompt(
+                "1. List all available MCP tools. Print each as: TOOL: <name>\n" +
+                    "2. Then call \"introduce_yourself\" tool with name \"Junie\".\n" +
+                    "3. Print the tool's response on a single line starting with the prefix: " +
+                    "RESULT: <text returned by the tool>\n" +
+                    "Do not skip any of the steps. The final line of your reply MUST be the 'RESULT:' line.")
 
-        output.dump("combined prompt")
-            .assumeJunieAvailable("combined prompt")
-            .assertJunieSuccess("combined prompt")
-            .assertOutputContainsAny(
-                "introduce_yourself", "mcp_teamcity_introduce_yourself",
-                "TOOL:", "MCP tools",
-                message = "output must reference MCP tools"
-            )
-            .assertOutputContainsAny(
-                "Hello, Junie", "TeamCity MCP server",
-                message = "introduce_yourself tool must have been called and returned a response"
-            )
+            output.dump("combined prompt")
+                .assumeJunieAvailable("combined prompt")
+                .assertJunieSuccess("combined prompt")
+                .assertOutputContainsAny(
+                    "introduce_yourself", "mcp_teamcity_introduce_yourself",
+                    "TOOL:", "MCP tools",
+                    message = "output must reference MCP tools"
+                )
+                .assertOutputContainsAny(
+                    "Hello, Junie", "TeamCity MCP server",
+                    message = "introduce_yourself tool must have been called and returned a response"
+                )
+        }
 
         FusLogAssertions.assertNoFusClassLoadingErrors()
 //        FusLogAssertions.assertFusEventsLogged(

@@ -90,6 +90,29 @@ abstract class McpIntegrationTestBase {
         }
     }
 
+    /**
+     * Re-run [block] when it fails with an [AssertionError].
+     *
+     * Assumption failures (skips) are not retried and propagate immediately.
+     */
+    protected fun retryOnAssertionFailure(label: String, attempts: Int = 2, block: () -> Unit) {
+        val failures = mutableListOf<AssertionError>()
+        repeat(attempts) { attempt ->
+            try {
+                block()
+                return
+            } catch (e: AssertionError) {
+                failures += e
+                if (attempt < attempts - 1) {
+                    println("  $label: assertion failed on attempt ${attempt + 1}/$attempts — retrying... (${e.message?.lineSequence()?.firstOrNull()})")
+                }
+            }
+        }
+        val last = failures.last()
+        failures.dropLast(1).forEach(last::addSuppressed)
+        throw last
+    }
+
     /** Unwraps the `body` object from the JSON envelope the REST tools return. */
     protected fun extractBody(result: TestMcpClient.ToolResult): JsonObject {
         val text = result.content.first().text

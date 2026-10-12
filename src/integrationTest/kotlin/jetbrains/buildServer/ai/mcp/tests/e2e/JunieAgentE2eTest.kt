@@ -15,7 +15,7 @@ import org.junit.jupiter.api.TestMethodOrder
  * the TeamCity MCP server.
  *
  * Approach:
- *  - A Docker image with Junie CLI is built once per test class
+ *  - A Docker image with the latest Junie CLI release is built once per test class
  *  - A container runs with `sleep infinity`; prompts are executed via `docker exec`
  *  - JUNIE_API_KEY is injected via `docker exec -e` at runtime and also passed via
  *    `--auth` flag. The bearer token is written to `.junie/mcp/mcp.json` in the
@@ -57,7 +57,7 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
 
         val dockerfileDir = System.getProperty("user.dir") + "/src/integrationTest/docker/junie-agent"
         println("  Building Docker image $IMAGE_TAG ...")
-        scripts.runChecked("common.sh", listOf("build", dockerfileDir, IMAGE_TAG), timeoutSeconds = 600)
+        scripts.runChecked("junie-agent.sh", listOf("build", dockerfileDir, IMAGE_TAG), timeoutSeconds = 600)
 
         scripts.runChecked("common.sh", listOf("start", CONTAINER_NAME, IMAGE_TAG))
         scripts.runChecked("junie-agent.sh", listOf("configure", CONTAINER_NAME, serverConfig.mcpUrl, serverConfig.bearerToken))

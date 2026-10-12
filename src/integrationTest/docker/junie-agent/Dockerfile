@@ -2,28 +2,26 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl ca-certificates gnupg git && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | \
-        gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && apt-get install -y nodejs && \
-    apt-get purge -y --auto-remove gnupg && \
+        curl ca-certificates git unzip && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user before installing Junie — the npm package is a shim
-# that downloads the real binary to ~/.local/bin/junie on first run
+# Create non-root user before installing Junie — the installer puts the shim into
+# ~/.local/bin/junie and the binary into ~/.local/share/junie
 RUN useradd -m -s /bin/bash agent
 USER agent
 WORKDIR /home/agent
 
-# Install Junie as the agent user so the shim and binary land in the right home dir
-RUN npm install -g @jetbrains/junie --prefix /home/agent/.npm-global
-ENV PATH="/home/agent/.npm-global/bin:/home/agent/.local/bin:${PATH}"
+# Install the latest Junie release via the official installer. The npm package lags
+# behind the release channel, so it is not used. JUNIE_LATEST is only a cache key:
+# junie-agent.sh sets it to the newest released version, so Docker's layer cache is
+# invalidated whenever a new Junie release is published.
+# (Don't name it JUNIE_VERSION — both the installer and the shim read that variable.)
+ARG JUNIE_LATEST=unknown
+RUN echo "Installing Junie (latest: ${JUNIE_LATEST})" && \
+    curl -fsSL https://junie.jetbrains.com/install.sh | bash
+ENV PATH="/home/agent/.local/bin:${PATH}"
 
-# Trigger the shim to download the actual binary
-RUN junie --version || true
+RUN junie --version
 
 # Pre-create a git repo so Junie doesn't complain
 RUN mkdir -p /home/agent/project && \

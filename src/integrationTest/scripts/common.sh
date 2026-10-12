@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Subcommands:
 #   check-docker                  — verify Docker daemon is reachable
-#   build <dockerfile-dir> <tag>  — build a Docker image
+#   build <dockerfile-dir> <tag> [docker-build-args...] — build a Docker image
 #   start <container-name> <tag>  — run a container in detached mode (sleep infinity)
 #   write-file <container> <path> — write stdin to a file inside the container
 #   stop <container-name>         — force-remove the container
@@ -31,7 +31,8 @@ cmd_check_docker() {
 cmd_build() {
     local dir="$1"
     local tag="$2"
-    docker build -t "$tag" "$dir"
+    shift 2
+    docker build "$@" -t "$tag" "$dir"
 }
 
 cmd_start() {

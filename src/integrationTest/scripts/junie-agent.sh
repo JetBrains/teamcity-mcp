@@ -5,6 +5,7 @@ set -euo pipefail
 # Usage: bash junie-agent.sh <subcommand> [args...]
 #
 # Subcommands:
+#   build      <dockerfile-dir> <tag>                  — build the image with the latest Junie release
 #   configure  <container> <mcp-url> <bearer-token>   — write .junie/mcp/mcp.json
 #   run-prompt <container> <prompt> <api-key>          — run a prompt via junie CLI
 
@@ -12,6 +13,25 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 WORK_DIR="/home/agent/project"
+
+cmd_build() {
+    local dir="$1"
+    local tag="$2"
+
+    # Resolve the latest released version (same feed the official installer uses) so the
+    # install layer is rebuilt whenever Junie is released, instead of being served from
+    # a stale Docker cache.
+    local version
+    version="$(curl -fsSL https://raw.githubusercontent.com/jetbrains-junie/junie/main/update-info.jsonl \
+        | sed -nE 's/.*"version":"([^"]+)".*/\1/p' | sort -V | tail -1)"
+    if [ -z "$version" ]; then
+        echo "Failed to resolve latest Junie version from update-info.jsonl" >&2
+        exit 1
+    fi
+    echo "Using Junie $version"
+
+    bash "$SCRIPT_DIR/common.sh" build "$dir" "$tag" --build-arg "JUNIE_LATEST=$version"
+}
 
 cmd_configure() {
     local container="$1"
@@ -40,7 +60,7 @@ cmd_run_prompt() {
     docker exec \
         -w "$WORK_DIR" \
         -e "JUNIE_API_KEY=$api_key" \
-        -e "PATH=/home/agent/.npm-global/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        -e "PATH=/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         "$container" \
         timeout 180 junie \
             --auth="$api_key" \
@@ -56,10 +76,11 @@ subcmd="${1:-}"
 shift || true
 
 case "$subcmd" in
+    build)      cmd_build "$@" ;;
     configure)  cmd_configure "$@" ;;
     run-prompt) cmd_run_prompt "$@" ;;
     *)
-        echo "Usage: $0 {configure|run-prompt} [args...]" >&2
+        echo "Usage: $0 {build|configure|run-prompt} [args...]" >&2
         exit 1
         ;;
 esac

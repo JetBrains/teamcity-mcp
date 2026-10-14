@@ -33,7 +33,7 @@ class SettingsServiceTest {
     }
 
     @Test
-    fun `pipeline and brave mode are enabled by default and brave mode can be disabled explicitly`() {
+    fun `pipeline and brave mode are enabled by default`() {
         mockkStatic(TeamCityProperties::class)
         val model = mockk<TeamCityProperties.Model>(relaxed = true)
         every { model.getPropertyOrNull(any()) } returns null
@@ -50,8 +50,15 @@ class SettingsServiceTest {
             settingsService.getEnabledToolNames()
         )
         assertTrue(settingsService.getEnabledResourceNames().contains(PipelineBraveGuideResource.SETTINGS_NAME))
+    }
 
+    @Test
+    fun `brave mode can be disabled explicitly`() {
+        mockkStatic(TeamCityProperties::class)
+        val model = mockk<TeamCityProperties.Model>(relaxed = true)
         every { model.getPropertyOrNull(MCP_BRAVE_MODE_TOGGLE) } returns "false"
+        every { TeamCityProperties.getModel() } returns model
+
         assertFalse(settingsService.isBraveModeEnabled())
     }
 

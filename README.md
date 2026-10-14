@@ -52,7 +52,7 @@ Configuration is done via TeamCity internal properties
 | Property | Default | Description |
 | --- |---------| --- |
 | `teamcity.ai.mcp.enabled` | `true`  | Master switch for the MCP server. |
-| `teamcity.ai.mcp.braveMode.enabled` | `true` | Enable destructive operations (PUT, DELETE, arbitrary POST). |
+| `teamcity.ai.mcp.braveMode.enabled` | `true` | Enable modifying operations (PUT, DELETE, arbitrary POST). |
 | `teamcity.ai.mcp.pipeline.enabled` | `true`  | Enable pipeline tools. |
 
 ## Connecting an AI agent

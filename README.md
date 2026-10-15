@@ -20,8 +20,9 @@ The plugin exposes the following capabilities to connected AI agents over MCP:
 - **Build logs** — `teamcity_build_log` tool retrieves and paginates build logs.
 - **Pipeline management** — read, create, and delete TeamCity pipelines.
 - **Operation modes**:
-  - **Safe (default)** — read-only and curated, safe-by-default write paths.
-  - **Brave** — full read/write access, including DELETE and arbitrary POST.
+  - **Brave (default)** — full read/write access, including DELETE and arbitrary POST.
+  - **Safe** — read-only and curated, safe-by-default write paths; set
+    `teamcity.ai.mcp.braveMode.enabled=false` to enable this mode.
 - **Auth-aware** — supports TeamCity bearer tokens and 2FA-equipped accounts.
 
 ## Requirements
@@ -51,7 +52,7 @@ Configuration is done via TeamCity internal properties
 | Property | Default | Description |
 | --- |---------| --- |
 | `teamcity.ai.mcp.enabled` | `true`  | Master switch for the MCP server. |
-| `teamcity.ai.mcp.braveMode.enabled` | `false` | Enable destructive operations (PUT, DELETE, arbitrary POST). |
+| `teamcity.ai.mcp.braveMode.enabled` | `true` | Enable modifying operations (PUT, DELETE, arbitrary POST). |
 | `teamcity.ai.mcp.pipeline.enabled` | `true`  | Enable pipeline tools. |
 
 ## Connecting an AI agent

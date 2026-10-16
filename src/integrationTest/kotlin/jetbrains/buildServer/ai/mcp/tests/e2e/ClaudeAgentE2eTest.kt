@@ -44,7 +44,7 @@ class ClaudeAgentE2eTest : McpIntegrationTestBase() {
 
         val dockerfileDir = System.getProperty("user.dir") + "/src/integrationTest/docker/claude-agent"
         println("  Building Docker image $IMAGE_TAG ...")
-        scripts.runChecked("common.sh", listOf("build", dockerfileDir, IMAGE_TAG), timeoutSeconds = 600)
+        scripts.runChecked("claude-agent.sh", listOf("build", dockerfileDir, IMAGE_TAG), timeoutSeconds = 600)
 
         scripts.runChecked("common.sh", listOf("start", CONTAINER_NAME, IMAGE_TAG))
         scripts.runChecked("claude-agent.sh", listOf("configure", CONTAINER_NAME, serverConfig.mcpUrl, serverConfig.bearerToken))

@@ -8,15 +8,30 @@ val diagClass = "org/jetbrains/kotlin/gradle/dsl/KotlinJvmProjectExtension.class
 
 fun diag(msg: String) = println("[MCP-DIAG] $msg")
 
+fun sha1(f: File): String {
+    val md = java.security.MessageDigest.getInstance("SHA-1")
+    f.inputStream().use { input -> val buf = ByteArray(1 shl 16); while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+
 fun checkJar(f: File): String {
     if (!f.exists()) return "MISSING"
     if (f.isDirectory) return "DIR has-class=${File(f, diagClass).exists()}"
     return try {
+        val actual = sha1(f)
+        val expected = f.parentFile.name
+        // modules-2 stores each file under a folder named by its SHA-1 (leading zeros dropped)
+        val shaInfo = if (actual.trimStart('0') == expected.trimStart('0')) "sha1=OK" else "sha1=MISMATCH actual=$actual"
         ZipFile(f).use { z ->
             var broken = 0
+            val badEntries = mutableListOf<String>()
             val entries = z.entries().toList()
-            for (e in entries) if (!e.isDirectory) try { z.getInputStream(e).use { it.readBytes() } } catch (_: Exception) { broken++ }
-            "size=${f.length()} entries=${entries.size} unreadable=$broken has-class=${z.getEntry(diagClass) != null}"
+            for (e in entries) if (!e.isDirectory) try {
+                val bytes = z.getInputStream(e).use { it.readBytes() }
+                val crc = java.util.zip.CRC32().apply { update(bytes) }.value
+                if (e.crc != -1L && crc != e.crc) { broken++; if (badEntries.size < 10) badEntries += e.name }
+            } catch (_: Exception) { broken++; if (badEntries.size < 10) badEntries += e.name }
+            "size=${f.length()} $shaInfo entries=${entries.size} bad-crc=$broken${if (badEntries.isEmpty()) "" else " bad=$badEntries"} has-class=${z.getEntry(diagClass) != null}"
         }
     } catch (e: Exception) {
         "CORRUPT size=${f.length()} ${e.javaClass.simpleName}: ${e.message}"

@@ -4,6 +4,9 @@
 if [ -n "${MCP_DIAG_BISECT:-}" ] && [ -z "${MCP_DIAG_INNER:-}" ] && [ "${1:-}" != "--version" ]; then
     bash "$(dirname "$0")/diag-bisect.sh"
 fi
+if [ -n "${MCP_DIAG_INSPECT:-}" ] && [ -z "${MCP_DIAG_INNER:-}" ] && [ "${1:-}" != "--version" ]; then
+    bash "$(dirname "$0")/diag-inspect.sh"
+fi
 
 # TEMPORARY diagnostics: build a fresh GRADLE_USER_HOME from selected parts of the seeded cache.
 # MCP_DIAG_COPY = space-separated paths relative to MCP_DIAG_SEED (default /mnt/cache/.gradle);

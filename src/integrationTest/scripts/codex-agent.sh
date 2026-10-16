@@ -14,16 +14,24 @@ source "$SCRIPT_DIR/common.sh"
 
 WORK_DIR="/home/agent/project"
 
+release_version() {
+    { curl -fsSL "$1" || true; } | sed -nE 's/.*"tag_name": *"rust-v([^"]+)".*/\1/p' | head -1
+}
+
 cmd_build() {
     local dir="$1"
     local tag="$2"
 
-    # Resolve the latest release (same channel the official installer uses; there is no
-    # stable channel). The Dockerfile installs exactly this version, and the install layer
-    # is rebuilt whenever it changes instead of being served from a stale Docker cache.
+    # Resolve the latest release the same way the official installer does (there is no
+    # stable channel): releases.openai.com first, falling back to GitHub Releases. The
+    # Dockerfile installs exactly this version, and the install layer is rebuilt whenever
+    # it changes instead of being served from a stale Docker cache.
     local version
-    version="$(curl -fsSL https://releases.openai.com/codex/channels/latest \
-        | sed -nE 's/.*"tag_name": *"rust-v([^"]+)".*/\1/p' | head -1)"
+    version="$(release_version https://releases.openai.com/codex/channels/latest)"
+    if [ -z "$version" ]; then
+        echo "Could not resolve the latest Codex version from releases.openai.com; retrying from GitHub Releases" >&2
+        version="$(release_version https://api.github.com/repos/openai/codex/releases/latest)"
+    fi
     if [ -z "$version" ]; then
         echo "Failed to resolve the latest Codex version" >&2
         exit 1

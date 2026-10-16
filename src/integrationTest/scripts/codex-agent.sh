@@ -5,6 +5,7 @@ set -euo pipefail
 # Usage: bash codex-agent.sh <subcommand> [args...]
 #
 # Subcommands:
+#   build      <dockerfile-dir> <tag>                                  — build the image with the latest Codex release
 #   configure  <container> <mcp-url> <bearer-token> <openai-api-key>  — write auth.json + register MCP
 #   run-prompt <container> <prompt> <openai-api-key> <bearer-token>   — run a prompt via codex CLI
 
@@ -12,6 +13,25 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 WORK_DIR="/home/agent/project"
+
+cmd_build() {
+    local dir="$1"
+    local tag="$2"
+
+    # Resolve the latest release (same channel the official installer uses; there is no
+    # stable channel). The Dockerfile installs exactly this version, and the install layer
+    # is rebuilt whenever it changes instead of being served from a stale Docker cache.
+    local version
+    version="$(curl -fsSL https://releases.openai.com/codex/channels/latest \
+        | sed -nE 's/.*"tag_name": *"rust-v([^"]+)".*/\1/p' | head -1)"
+    if [ -z "$version" ]; then
+        echo "Failed to resolve the latest Codex version" >&2
+        exit 1
+    fi
+    echo "Using Codex $version"
+
+    bash "$SCRIPT_DIR/common.sh" build "$dir" "$tag" --build-arg "INSTALL_VERSION=$version"
+}
 
 cmd_configure() {
     local container="$1"
@@ -64,10 +84,11 @@ subcmd="${1:-}"
 shift || true
 
 case "$subcmd" in
+    build)      cmd_build "$@" ;;
     configure)  cmd_configure "$@" ;;
     run-prompt) cmd_run_prompt "$@" ;;
     *)
-        echo "Usage: $0 {configure|run-prompt} [args...]" >&2
+        echo "Usage: $0 {build|configure|run-prompt} [args...]" >&2
         exit 1
         ;;
 esac

@@ -78,8 +78,8 @@ gradle.addProjectEvaluationListener(object : ProjectEvaluationListener {
                 .filter { it.moduleVersion?.group == "org.jetbrains.kotlin" && it.moduleVersion?.name?.startsWith("kotlin-gradle-plugin") == true }
                 .forEach { c -> diag("resolved ${c.id.displayName} variants=${c.variants.map { it.displayName }}") }
             classpath.incoming.artifacts.artifacts
-                .filter { it.file.name.contains("kotlin-gradle-plugin") }
-                .forEach { a -> diag("classpath ${a.id.displayName} ${a.file} ${checkJar(a.file)}") }
+                .sortedBy { it.id.displayName }
+                .forEach { a -> diag("classpath ${a.id.displayName} ${a.file.parentFile.name.take(8)} ${checkJar(a.file)}") }
         } catch (e: Exception) {
             diag("classpath inspection failed: ${e.javaClass.simpleName}: ${e.message}")
         }

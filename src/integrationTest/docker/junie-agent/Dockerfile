@@ -11,6 +11,9 @@ RUN useradd -m -s /bin/bash agent
 USER agent
 WORKDIR /home/agent
 
+# Fail the build if the installer download fails: without pipefail, /bin/sh -c only
+# checks the exit status of the final `bash`, which succeeds on empty input.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Install Junie via the official installer. The npm package lags behind the release
 # channel, so it is not used. junie-agent.sh sets INSTALL_VERSION to the newest released
 # version: the installer installs exactly that version, and Docker's layer cache is

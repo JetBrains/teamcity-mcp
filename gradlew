@@ -1,5 +1,28 @@
 #!/bin/sh
 
+# TEMPORARY diagnostics: build a fresh GRADLE_USER_HOME from selected parts of the seeded cache.
+# MCP_DIAG_COPY = space-separated paths relative to MCP_DIAG_SEED (default /mnt/cache/.gradle);
+# modules-2 and wrapper are hard-linked (immutable), everything else is copied.
+if [ -n "$MCP_DIAG_COPY" ]; then
+    seed="${MCP_DIAG_SEED:-/mnt/cache/.gradle}"
+    GRADLE_USER_HOME="${TMPDIR:-/tmp}/mcp-diag-gradle-home"
+    if [ ! -f "$GRADLE_USER_HOME/.mcp-diag-done" ]; then
+        rm -rf "$GRADLE_USER_HOME"
+        mkdir -p "$GRADLE_USER_HOME"
+        for rel in $MCP_DIAG_COPY; do
+            mkdir -p "$GRADLE_USER_HOME/$(dirname "$rel")"
+            case "$rel" in
+                caches/modules-2*|wrapper*) mode=-al ;;
+                *) mode=-a ;;
+            esac
+            cp $mode "$seed/$rel" "$GRADLE_USER_HOME/$rel" && echo "[MCP-DIAG] copied ($mode) $rel" || echo "[MCP-DIAG] copy FAILED $rel"
+        done
+        touch "$GRADLE_USER_HOME/.mcp-diag-done"
+    fi
+    export GRADLE_USER_HOME
+    echo "[MCP-DIAG] GRADLE_USER_HOME=$GRADLE_USER_HOME from $seed: $MCP_DIAG_COPY"
+fi
+
 #
 # Copyright © 2015 the original authors.
 #

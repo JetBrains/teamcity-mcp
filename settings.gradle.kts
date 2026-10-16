@@ -25,6 +25,15 @@ fun checkJar(f: File): String {
 
 val home = gradle.gradleUserHomeDir
 val caches = File(home, "caches")
+
+// Bisecting: delete the listed sub-caches (relative to caches/) before build.gradle.kts is compiled
+System.getenv("MCP_DIAG_DELETE")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach { rel ->
+    val target = File(caches, rel)
+    diag("deleting caches/$rel exists=${target.exists()} ok=${target.deleteRecursively()}")
+}
+File(caches, "${gradle.gradleVersion}/kotlin-dsl").walkTopDown().maxDepth(3).forEach { f ->
+    diag("kotlin-dsl ${f.relativeTo(caches)} ${if (f.isFile) "size=${f.length()}" else "dir children=${f.list()?.size}"}")
+}
 diag("gradle=${gradle.gradleVersion} GRADLE_USER_HOME=$home GRADLE_RO_DEP_CACHE=${System.getenv("GRADLE_RO_DEP_CACHE")}")
 diag("caches dirs: ${caches.listFiles()?.map { it.name }?.sorted()}")
 File(caches, gradle.gradleVersion).listFiles()?.sortedBy { it.name }?.forEach { d ->

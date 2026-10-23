@@ -85,22 +85,27 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP tools`() {
-        val output = scripts.runWithRetry("gemini-agent.sh",
-            listOf("run-prompt", CONTAINER_NAME,
-                "List all available MCP tools. For each tool print exactly one line:\n" +
-                    "TOOL: <name> - <description>\n" +
-                    "Do not call any tool. Only list them.",
-                findApiKey()!!))
+        // Gemini lists its built-in tools first and may cut a long answer short, so ask only for names
+        // from the teamcity MCP server to keep the answer short.
+        retryOnAssertionFailure("tool discovery") {
+            val output = scripts.runWithRetry("gemini-agent.sh",
+                listOf("run-prompt", CONTAINER_NAME,
+                    "List the names of the tools provided by the MCP server named \"teamcity\" only " +
+                        "(ignore all built-in tools). Print one line per tool:\n" +
+                        "TOOL: <name>\n" +
+                        "Do not print descriptions. Do not call any tool. Only list them.",
+                    findApiKey()!!))
 
-        output.dump("tool discovery")
-            .assumeExternalApiAvailable("tool discovery")
-            .assertGeminiSuccess("tool discovery")
-            // Gemini's delta streaming may split "introduce_yourself" across message boundaries,
-            // so check for partial matches that survive the split.
-            .assertOutputContainsAny(
-                "introduce_yourself", "introduce_", "_yourself",
-                message = "tool listing must include introduce_yourself"
-            )
+            output.dump("tool discovery")
+                .assumeExternalApiAvailable("tool discovery")
+                .assertGeminiSuccess("tool discovery")
+                // Gemini's delta streaming may split "introduce_yourself" across message boundaries,
+                // so check for partial matches that survive the split.
+                .assertOutputContainsAny(
+                    "introduce_yourself", "introduce_", "_yourself",
+                    message = "tool listing must include introduce_yourself"
+                )
+        }
     }
 
     @Test

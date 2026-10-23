@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.tools.pipeline
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiException
@@ -36,6 +37,14 @@ class PipelinePostTool(
     }
 
     override val name = NAME
+
+    override val annotations = McpToolAnnotations(
+        title = "Create or update TeamCity pipeline",
+        readOnly = false,
+        destructive = true,
+        idempotent = false,
+        openWorld = false
+    )
 
     override val description = """
         |Perform a POST request to TeamCity Pipelines controller endpoints under /app/pipeline.

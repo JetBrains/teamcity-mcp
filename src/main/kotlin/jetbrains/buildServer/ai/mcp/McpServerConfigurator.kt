@@ -8,6 +8,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
+import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import jetbrains.buildServer.ai.mcp.resources.BraveModeAwareMcpResource
 import jetbrains.buildServer.ai.mcp.resources.McpResource
@@ -48,12 +49,22 @@ class McpServerConfigurator(
         )
 
         for (tool in getEnabledTools()) {
+            val annotations = tool.annotations
             server.addTool(
                 name = tool.name,
                 description = tool.description,
                 inputSchema = ToolSchema(
                     properties = tool.inputSchema.properties,
                     required = tool.inputSchema.required
+                ),
+                title = annotations.title,
+                // annotations.title duplicates Tool.title for clients older than spec 2025-06-18
+                toolAnnotations = ToolAnnotations(
+                    title = annotations.title,
+                    readOnlyHint = annotations.readOnly,
+                    destructiveHint = annotations.destructive,
+                    idempotentHint = annotations.idempotent,
+                    openWorldHint = annotations.openWorld
                 )
             ) { request ->
                 try {

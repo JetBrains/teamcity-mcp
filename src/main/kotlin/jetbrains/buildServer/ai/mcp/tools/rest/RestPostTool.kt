@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.BUILD_QUEUE_PATH
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +28,18 @@ class RestPostTool(
 
         internal const val NAME = "teamcity_rest_post"
 
+        /**
+         * Shared with [RestPostBraveTool], which registers under the same [NAME]. Destructive in both
+         * modes: POST endpoints also cancel builds (e.g. `buildCancelRequest` on the build queue).
+         */
+        internal val ANNOTATIONS = McpToolAnnotations(
+            title = "Post to TeamCity REST API",
+            readOnly = false,
+            destructive = true,
+            idempotent = false,
+            openWorld = false
+        )
+
         private val ERROR_GUIDANCE = RestToolUtils.COMMON_ERROR_GUIDANCE + mapOf(
             400 to "Check the request body structure — it may be malformed or missing required fields.",
             409 to "Conflict — the request could not be completed due to a conflict with current state.",
@@ -35,6 +48,8 @@ class RestPostTool(
     }
 
     override val name = NAME
+
+    override val annotations = ANNOTATIONS
 
     override val description = """
         |Perform a POST request to the TeamCity REST API.

@@ -46,6 +46,8 @@ class RestPostBraveTool(
 
     override val name = RestPostTool.NAME
 
+    override val annotations = RestPostTool.ANNOTATIONS
+
     override val description = """
         |Perform a POST request to the TeamCity REST API.
         |

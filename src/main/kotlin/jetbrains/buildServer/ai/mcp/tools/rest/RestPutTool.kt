@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +33,16 @@ class RestPutTool(
     }
 
     override val name = NAME
+
+    // Not idempotent: some TeamCity PUT endpoints are actions (e.g. /builds/{id}/finish, /buildQueue
+    // re-queues all builds), and collection replaces (steps, triggers, features) regenerate ids.
+    override val annotations = McpToolAnnotations(
+        title = "Update TeamCity data",
+        readOnly = false,
+        destructive = true,
+        idempotent = false,
+        openWorld = false
+    )
 
     override val description = """
         |Perform a PUT request to the TeamCity REST API.

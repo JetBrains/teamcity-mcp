@@ -291,6 +291,39 @@ class McpProtocolComplianceTest : McpIntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `tools-list response contains title and explicit annotations for every tool`() {
+        mcpClient().use { client ->
+            client.withSession {
+                val (status, body) = sendRequestRaw("tools/list", buildJsonObject { })
+                assertEquals(200, status)
+
+                val tools = Json.parseToJsonElement(body).jsonObject["result"]!!.jsonObject["tools"]!!.jsonArray
+                    .map { it.jsonObject }
+                    .associateBy { it["name"]!!.jsonPrimitive.content }
+
+                for ((name, tool) in tools) {
+                    assertFalse(tool["title"]?.jsonPrimitive?.content.isNullOrBlank(), "$name must have a 'title'")
+                    val annotations = tool["annotations"]?.jsonObject
+                    assertNotNull(annotations, "$name must have 'annotations'")
+                    for (hint in listOf("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")) {
+                        assertNotNull(annotations!![hint]?.jsonPrimitive?.booleanOrNull, "$name must set '$hint' explicitly")
+                    }
+                }
+
+                val get = tools.getValue("teamcity_rest_get")["annotations"]!!.jsonObject
+                assertEquals(true, get["readOnlyHint"]?.jsonPrimitive?.boolean)
+                assertEquals(false, get["destructiveHint"]?.jsonPrimitive?.boolean)
+
+                val post = tools.getValue("teamcity_rest_post")["annotations"]!!.jsonObject
+                assertEquals(false, post["readOnlyHint"]?.jsonPrimitive?.boolean)
+                assertEquals(true, post["destructiveHint"]?.jsonPrimitive?.boolean)
+
+                println("  ✓ Annotations valid for ${tools.size} tools: ${tools.keys.sorted()}")
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Error response format
     // -----------------------------------------------------------------------

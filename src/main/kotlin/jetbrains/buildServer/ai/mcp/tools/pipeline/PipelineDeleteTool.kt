@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tools.pipeline
 
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiException
@@ -30,6 +31,14 @@ class PipelineDeleteTool(
     }
 
     override val name = NAME
+
+    override val annotations = McpToolAnnotations(
+        title = "Delete TeamCity pipeline data",
+        readOnly = false,
+        destructive = true,
+        idempotent = true,
+        openWorld = false
+    )
 
     override val description = """
         |Delete a TeamCity Pipeline by id.

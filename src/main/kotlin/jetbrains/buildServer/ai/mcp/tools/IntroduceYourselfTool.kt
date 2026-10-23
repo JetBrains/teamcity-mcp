@@ -16,6 +16,8 @@ class IntroduceYourselfTool : McpTool {
 
     override val name = NAME
 
+    override val annotations = McpToolAnnotations.worstCase("Introduce yourself")
+
     override val description = "Let the server know who you are"
 
     override val inputSchema = McpToolSchema(

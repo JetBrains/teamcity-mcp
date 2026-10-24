@@ -3,6 +3,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.SettingsService
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import kotlinx.serialization.json.JsonObject
@@ -31,6 +32,16 @@ class RestDeleteTool(
     }
 
     override val name = NAME
+
+    // Not idempotent: locators pick a different target on each call, e.g. /builds/buildType:X deletes
+    // the latest build, and /builds/multiple/buildType:X,count:5 deletes five more every time.
+    override val annotations = McpToolAnnotations(
+        title = "Delete TeamCity data",
+        readOnly = false,
+        destructive = true,
+        idempotent = false,
+        openWorld = false
+    )
 
     override val description = """
         |Perform a DELETE request to the TeamCity REST API.

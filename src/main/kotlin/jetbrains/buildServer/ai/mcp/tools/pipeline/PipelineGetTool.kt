@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tools.pipeline
 
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import jetbrains.buildServer.ai.mcp.tools.rest.RestApiException
@@ -32,6 +33,14 @@ class PipelineGetTool(
     }
 
     override val name = NAME
+
+    override val annotations = McpToolAnnotations(
+        title = "Get TeamCity pipeline data",
+        readOnly = true,
+        destructive = false,
+        idempotent = true,
+        openWorld = false
+    )
 
     override val description = """
         |Perform a GET request to TeamCity Pipelines controller endpoints under /app/pipeline.

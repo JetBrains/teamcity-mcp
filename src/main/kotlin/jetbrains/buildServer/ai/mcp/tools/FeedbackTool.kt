@@ -22,6 +22,8 @@ class FeedbackTool : McpTool {
 
     override val name = NAME
 
+    override val annotations = McpToolAnnotations.worstCase("Send feedback about TeamCity MCP")
+
     override val description = """
         Report feedback about this MCP server to help TeamCity developers improve the AI agent experience.
 

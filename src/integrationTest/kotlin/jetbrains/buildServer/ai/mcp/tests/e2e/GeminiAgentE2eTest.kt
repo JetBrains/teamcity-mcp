@@ -90,7 +90,7 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
         retryOnAssertionFailure("tool discovery") {
             val output = scripts.runWithRetry("gemini-agent.sh",
                 listOf("run-prompt", CONTAINER_NAME,
-                    "List the names of the tools provided by the MCP server named \"teamcity\" only " +
+                    "List the names of the tools provided by the MCP server" +
                         "(ignore all built-in tools). Print one line per tool:\n" +
                         "TOOL: <name>\n" +
                         "Do not print descriptions. Do not call any tool. Only list them.",

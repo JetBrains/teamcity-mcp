@@ -85,15 +85,12 @@ class GeminiAgentE2eTest : McpIntegrationTestBase() {
 
     @Test
     fun `agent discovers TeamCity MCP tools`() {
-        // Gemini lists its built-in tools first and may cut a long answer short, so ask only for names
-        // from the teamcity MCP server to keep the answer short.
         retryOnAssertionFailure("tool discovery") {
             val output = scripts.runWithRetry("gemini-agent.sh",
                 listOf("run-prompt", CONTAINER_NAME,
-                    "List the names of the tools provided by the MCP server named \"teamcity\" only " +
-                        "(ignore all built-in tools). Print one line per tool:\n" +
-                        "TOOL: <name>\n" +
-                        "Do not print descriptions. Do not call any tool. Only list them.",
+                    "List all available MCP tools. For each tool print exactly one line:\n" +
+                        "TOOL: <name> - <description>\n" +
+                        "Do not call any tool. Only list them.",
                     findApiKey()!!))
 
             output.dump("tool discovery")

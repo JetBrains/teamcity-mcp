@@ -7,12 +7,9 @@ We are very eager and grateful to hear about any issues you find.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Report vulnerabilities through one of the following channels:
-
-- **JetBrains issue tracker** — create an issue at https://youtrack.jetbrains.com/newIssue?project=TW
-  and set the issue type to **Security Problem** to limit visibility.
-- **Email** — send details to [security@jetbrains.com](mailto:security@jetbrains.com),
-  encrypted with our [PGP key](https://www.jetbrains.com/privacy-security/) if needed.
+Report vulnerabilities through the **JetBrains issue tracker** at
+https://youtrack.jetbrains.com/newIssue?project=TW
+and set the issue type to **Security Problem** to limit visibility.
 
 The report should include a description of the vulnerability and a working proof of concept.
 Please use your own data when demonstrating the issue and limit the impact to the minimum

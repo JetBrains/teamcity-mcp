@@ -3,18 +3,35 @@ package jetbrains.buildServer.ai.mcp
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
+import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import jetbrains.buildServer.ai.mcp.resources.BraveModeAwareMcpResource
 import jetbrains.buildServer.ai.mcp.resources.McpResource
 import jetbrains.buildServer.ai.mcp.tools.BraveModeAwareMcpTool
+import jetbrains.buildServer.ai.mcp.tools.FeedbackTool
+import jetbrains.buildServer.ai.mcp.tools.IntroduceYourselfTool
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineDeleteTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelineGetTool
+import jetbrains.buildServer.ai.mcp.tools.pipeline.PipelinePostTool
+import jetbrains.buildServer.ai.mcp.tools.rest.BuildLogTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestDeleteTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestGetTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestPostBraveTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestPostTool
+import jetbrains.buildServer.ai.mcp.tools.rest.RestPutTool
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -115,6 +132,7 @@ class McpServerConfiguratorTest {
                 override val name = "failing_tool"
                 override val description = "A tool that fails"
                 override val inputSchema = McpToolSchema()
+                override val annotations = testAnnotations
                 override suspend fun execute(arguments: JsonObject?): McpToolResult {
                     throw RuntimeException("Something went wrong")
                 }
@@ -122,6 +140,95 @@ class McpServerConfiguratorTest {
             val configurator = configurator(listOf(failingTool))
             val server = configurator.configureServer()
             // The server was created successfully — the exception handling is in the lambda
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tool annotations
+    // -----------------------------------------------------------------------
+
+    @Nested
+    inner class ToolAnnotationsRegistration {
+
+        @Test
+        fun `annotations and title are passed to the registered tool`() {
+            every { settingsService.getEnabledToolNames() } returns setOf("annotated")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            val annotations = McpToolAnnotations(
+                title = "Annotated tool",
+                readOnly = false,
+                destructive = true,
+                idempotent = true,
+                openWorld = false
+            )
+            val server = configurator(listOf(testTool("annotated", annotations))).configureServer()
+
+            val tool = server.tools.getValue("annotated").tool
+            assertEquals("Annotated tool", tool.title)
+            assertEquals(
+                ToolAnnotations(
+                    title = "Annotated tool",
+                    readOnlyHint = false,
+                    destructiveHint = true,
+                    idempotentHint = true,
+                    openWorldHint = false
+                ),
+                tool.annotations
+            )
+        }
+
+        @Test
+        fun `false hints are serialized explicitly`() {
+            every { settingsService.getEnabledToolNames() } returns setOf("read_only")
+            every { settingsService.getEnabledResourceNames() } returns emptySet()
+            val annotations = McpToolAnnotations(
+                title = "Read only",
+                readOnly = true,
+                destructive = false,
+                idempotent = true,
+                openWorld = false
+            )
+            val server = configurator(listOf(testTool("read_only", annotations))).configureServer()
+
+            val json = McpJson.encodeToJsonElement(server.tools.getValue("read_only").tool).jsonObject
+            val hints = json.getValue("annotations").jsonObject
+            assertEquals(JsonPrimitive(true), hints["readOnlyHint"])
+            assertEquals(JsonPrimitive(false), hints["destructiveHint"])
+            assertEquals(JsonPrimitive(true), hints["idempotentHint"])
+            assertEquals(JsonPrimitive(false), hints["openWorldHint"])
+            assertEquals(JsonPrimitive("Read only"), json["title"])
+        }
+
+        @Test
+        fun `every tool has consistent annotations`() {
+            val tools = listOf(
+                RestGetTool(mockk(relaxed = true)),
+                BuildLogTool(mockk(relaxed = true)),
+                RestPostTool(mockk(relaxed = true), settingsService),
+                RestPostBraveTool(mockk(relaxed = true), settingsService),
+                RestPutTool(mockk(relaxed = true), settingsService),
+                RestDeleteTool(mockk(relaxed = true), settingsService),
+                PipelineGetTool(mockk(relaxed = true)),
+                PipelinePostTool(mockk(relaxed = true), settingsService),
+                PipelineDeleteTool(mockk(relaxed = true)),
+                FeedbackTool(),
+                IntroduceYourselfTool()
+            )
+            for (tool in tools) {
+                val annotations = tool.annotations
+                assertFalse(annotations.title.isBlank(), "${tool::class.simpleName} has a blank title")
+                if (annotations.readOnly) {
+                    assertFalse(annotations.destructive, "${tool::class.simpleName} is read-only but destructive")
+                }
+            }
+        }
+
+        @Test
+        fun `safe and brave POST variants share annotations`() {
+            assertEquals(
+                RestPostTool(mockk(relaxed = true), settingsService).annotations,
+                RestPostBraveTool(mockk(relaxed = true), settingsService).annotations
+            )
         }
     }
 
@@ -358,9 +465,12 @@ class McpServerConfiguratorTest {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private fun testTool(toolName: String) = object : McpTool {
+    private val testAnnotations = McpToolAnnotations.worstCase("Test tool")
+
+    private fun testTool(toolName: String, toolAnnotations: McpToolAnnotations = testAnnotations) = object : McpTool {
         override val name = toolName
         override val description = "Test tool $toolName"
+        override val annotations = toolAnnotations
         override val inputSchema = McpToolSchema(
             properties = buildJsonObject {
                 putJsonObject("arg") { put("type", "string") }
@@ -384,6 +494,7 @@ class McpServerConfiguratorTest {
         override val brave = brave
         override val name = toolName
         override val description = "Test BraveModeAware tool $toolName (brave=$brave)"
+        override val annotations = testAnnotations
         override val inputSchema = McpToolSchema(
             properties = buildJsonObject {
                 putJsonObject("arg") { put("type", "string") }

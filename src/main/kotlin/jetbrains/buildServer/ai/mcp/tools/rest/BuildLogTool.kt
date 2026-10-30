@@ -2,6 +2,7 @@ package jetbrains.buildServer.ai.mcp.tools.rest
 
 import com.intellij.openapi.diagnostic.Logger
 import jetbrains.buildServer.ai.mcp.tools.McpTool
+import jetbrains.buildServer.ai.mcp.tools.McpToolAnnotations
 import jetbrains.buildServer.ai.mcp.tools.McpToolResult
 import jetbrains.buildServer.ai.mcp.tools.McpToolSchema
 import jetbrains.buildServer.serverSide.TeamCityProperties
@@ -54,6 +55,14 @@ class BuildLogTool(
     }
 
     override val name = NAME
+
+    override val annotations = McpToolAnnotations(
+        title = "Read TeamCity build log",
+        readOnly = true,
+        destructive = false,
+        idempotent = true,
+        openWorld = false
+    )
 
     override val description = """
         |View build log messages with filtering and pagination.

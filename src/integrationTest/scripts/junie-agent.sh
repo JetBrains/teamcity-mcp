@@ -18,19 +18,29 @@ cmd_build() {
     local dir="$1"
     local tag="$2"
 
-    # Resolve the latest released version (same feed the official installer uses) so the
-    # install layer is rebuilt whenever Junie is released, instead of being served from
-    # a stale Docker cache.
+    # The image is always Linux; its architecture follows the Docker daemon's.
+    local platform
+    case "$(docker version --format '{{.Server.Arch}}')" in
+        amd64|x86_64)  platform="linux-amd64" ;;
+        arm64|aarch64) platform="linux-aarch64" ;;
+        *) echo "Unsupported Docker architecture for Junie" >&2; exit 1 ;;
+    esac
+
+    # Resolve the latest released version for the image's platform (same feed and filter
+    # the official installer uses). The Dockerfile installs exactly this version, and the
+    # install layer is rebuilt whenever it changes instead of being served from a stale
+    # Docker cache.
     local version
     version="$(curl -fsSL https://raw.githubusercontent.com/jetbrains-junie/junie/main/update-info.jsonl \
+        | grep "\"platform\":\"$platform\"" \
         | sed -nE 's/.*"version":"([^"]+)".*/\1/p' | sort -V | tail -1)"
     if [ -z "$version" ]; then
-        echo "Failed to resolve latest Junie version from update-info.jsonl" >&2
+        echo "Failed to resolve latest Junie version for $platform from update-info.jsonl" >&2
         exit 1
     fi
     echo "Using Junie $version"
 
-    bash "$SCRIPT_DIR/common.sh" build "$dir" "$tag" --build-arg "JUNIE_LATEST=$version"
+    bash "$SCRIPT_DIR/common.sh" build "$dir" "$tag" --build-arg "INSTALL_VERSION=$version"
 }
 
 cmd_configure() {

@@ -5,6 +5,7 @@ set -euo pipefail
 # Usage: bash claude-agent.sh <subcommand> [args...]
 #
 # Subcommands:
+#   build      <dockerfile-dir> <tag>                  — build the image with the latest stable Claude Code release
 #   configure  <container> <mcp-url> <bearer-token>   — write .mcp.json
 #   run-prompt <container> <prompt> <api-key>          — run a prompt via claude CLI
 
@@ -12,6 +13,24 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 WORK_DIR="/home/agent/project"
+
+cmd_build() {
+    local dir="$1"
+    local tag="$2"
+
+    # Resolve the current stable release (same endpoint the official installer uses). The
+    # Dockerfile installs exactly this version, and the install layer is rebuilt whenever
+    # it changes instead of being served from a stale Docker cache.
+    local version
+    version="$(curl -fsSL https://downloads.claude.ai/claude-code-releases/stable)"
+    if [ -z "$version" ]; then
+        echo "Failed to resolve the stable Claude Code version" >&2
+        exit 1
+    fi
+    echo "Using Claude Code $version"
+
+    bash "$SCRIPT_DIR/common.sh" build "$dir" "$tag" --build-arg "INSTALL_VERSION=$version"
+}
 
 cmd_configure() {
     local container="$1"
@@ -53,10 +72,11 @@ subcmd="${1:-}"
 shift || true
 
 case "$subcmd" in
+    build)      cmd_build "$@" ;;
     configure)  cmd_configure "$@" ;;
     run-prompt) cmd_run_prompt "$@" ;;
     *)
-        echo "Usage: $0 {configure|run-prompt} [args...]" >&2
+        echo "Usage: $0 {build|configure|run-prompt} [args...]" >&2
         exit 1
         ;;
 esac

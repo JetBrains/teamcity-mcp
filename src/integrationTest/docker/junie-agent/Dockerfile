@@ -11,14 +11,18 @@ RUN useradd -m -s /bin/bash agent
 USER agent
 WORKDIR /home/agent
 
-# Install the latest Junie release via the official installer. The npm package lags
-# behind the release channel, so it is not used. JUNIE_LATEST is only a cache key:
-# junie-agent.sh sets it to the newest released version, so Docker's layer cache is
-# invalidated whenever a new Junie release is published.
-# (Don't name it JUNIE_VERSION — both the installer and the shim read that variable.)
-ARG JUNIE_LATEST=unknown
-RUN echo "Installing Junie (latest: ${JUNIE_LATEST})" && \
-    curl -fsSL https://junie.jetbrains.com/install.sh | bash
+# Fail the build if the installer download fails: without pipefail, /bin/sh -c only
+# checks the exit status of the final `bash`, which succeeds on empty input.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# Install Junie via the official installer. The npm package lags behind the release
+# channel, so it is not used. junie-agent.sh sets INSTALL_VERSION to the newest released
+# version: the installer installs exactly that version, and Docker's layer cache is
+# invalidated whenever a new Junie release is published. Empty means "latest at build time".
+# (Don't name the ARG JUNIE_VERSION — the shim reads that variable too, so it is set only
+# for the installer.)
+ARG INSTALL_VERSION=
+RUN echo "Installing Junie ${INSTALL_VERSION:-latest}" && \
+    curl -fsSL https://junie.jetbrains.com/install.sh | JUNIE_VERSION="${INSTALL_VERSION}" bash
 ENV PATH="/home/agent/.local/bin:${PATH}"
 
 RUN junie --version

@@ -213,8 +213,15 @@ echo "Permission visibility fixtures created"
 
 # ── Create pipeline fixture ──────────────────────────────────────────────────
 
+echo "=== Creating pipeline parent project ==="
+curl -sf -u "admin:admin" -X POST "${TC_BASE_URL}/httpAuth/app/rest/projects" \
+    -H "Content-Type: application/json" -H "Accept: application/json" \
+    -d '{"id":"McpPipelines","name":"MCP Pipelines","parentProject":{"id":"_Root"}}'
+echo ""
+echo "Pipeline parent project created"
+
 echo "=== Creating pipeline fixture ==="
-curl -sf -u "admin:admin" -X POST "${TC_BASE_URL}/app/pipeline" \
+curl -sf -u "admin:admin" -X POST "${TC_BASE_URL}/app/pipeline?parentProjectExtId=McpPipelines" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
     -d '{

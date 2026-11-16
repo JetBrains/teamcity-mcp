@@ -31,12 +31,13 @@ class PipelineToolSmokeTest : McpIntegrationTestBase() {
                 )
                 ensureSeededPipeline()
 
-                val result = callTool("teamcity_pipeline_get", mapOf("path" to "/app/pipeline"))
+                val query = "parentProjectExtId=$PIPELINE_PARENT_PROJECT_ID"
+                val result = callTool("teamcity_pipeline_get", mapOf("path" to "/app/pipeline", "query" to query))
                 assertFalse(result.isError, "teamcity_pipeline_get should succeed, got: ${result.content}")
 
                 val payload = json.parseToJsonElement(result.content.first().text).jsonObject
                 val meta = payload.getValue("meta").jsonObject
-                assertEquals("/app/pipeline", meta.getValue("url").jsonPrimitive.content)
+                assertEquals("/app/pipeline?$query", meta.getValue("url").jsonPrimitive.content)
                 assertEquals(200, meta.getValue("statusCode").jsonPrimitive.content.toInt())
 
                 val body = payload["body"]

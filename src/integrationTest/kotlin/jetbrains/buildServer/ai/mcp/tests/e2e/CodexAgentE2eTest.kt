@@ -158,7 +158,7 @@ class CodexAgentE2eTest : McpIntegrationTestBase() {
 
         val output = scripts.runWithRetry("codex-agent.sh",
             listOf("run-prompt", CONTAINER_NAME,
-                "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
+                "Use the teamcity_pipeline_get tool to call path /app/pipeline with query parentProjectExtId=$PIPELINE_PARENT_PROJECT_ID.\n" +
                     "Then print one line starting with:\n" +
                     "PIPELINES: <short summary of what was returned>\n" +
                     "The summary must explicitly mention the pipeline named \"" + seededPipelineName + "\" if it is present.\n" +

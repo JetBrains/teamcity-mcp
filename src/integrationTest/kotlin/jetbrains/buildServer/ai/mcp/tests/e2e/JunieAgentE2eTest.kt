@@ -147,7 +147,7 @@ class JunieAgentE2eTest : McpIntegrationTestBase() {
         }
 
         val output = runJuniePrompt(
-            "Use the teamcity_pipeline_get tool to call path /app/pipeline with query parentProjectExtId=$PIPELINE_PARENT_PROJECT_ID.\n" +
+            "Use the teamcity_pipeline_get tool to call path /app/pipeline with no query.\n" +
                 "Then print one line starting with:\n" +
                 "PIPELINES: <short summary of what was returned>\n" +
                 "The summary must explicitly mention the pipeline named \"" + seededPipelineName + "\" if it is present.\n" +

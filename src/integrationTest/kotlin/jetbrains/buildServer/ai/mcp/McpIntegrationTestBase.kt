@@ -30,8 +30,6 @@ abstract class McpIntegrationTestBase {
 
     protected val seededPipelineName = "MCP Seeded Pipeline"
 
-    private val pipelinePath = "/app/pipeline?parentProjectExtId=$PIPELINE_PARENT_PROJECT_ID"
-
     private val json = Json { ignoreUnknownKeys = true }
     private val http: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
@@ -139,7 +137,7 @@ abstract class McpIntegrationTestBase {
             put("notifications", buildJsonArray { })
         }
 
-        val response = sendTeamCityRequest(pipelinePath, "POST", payload.toString())
+        val response = sendTeamCityRequest("/app/pipeline", "POST", payload.toString())
         check(response.statusCode() in 200..299) {
             "Failed to create seeded pipeline fixture: HTTP ${response.statusCode()} body=${response.body()}"
         }
@@ -149,8 +147,7 @@ abstract class McpIntegrationTestBase {
     }
 
     protected fun listPipelines(): List<JsonObject> {
-        ensurePipelineParentProject()
-        val response = sendTeamCityRequest(pipelinePath)
+        val response = sendTeamCityRequest("/app/pipeline")
         check(response.statusCode() in 200..299) {
             "Failed to list pipelines: HTTP ${response.statusCode()} body=${response.body()}"
         }
@@ -163,7 +160,6 @@ abstract class McpIntegrationTestBase {
     }
 
     protected fun createPipeline(name: String, yaml: String = "jobs:\n  Job1:\n    name: Seed Job\n    steps: []\n"): String {
-        ensurePipelineParentProject()
         val payload = buildJsonObject {
             put("name", name)
             put("yaml", yaml)
@@ -173,19 +169,13 @@ abstract class McpIntegrationTestBase {
             put("notifications", buildJsonArray { })
         }
 
-        val response = sendTeamCityRequest(pipelinePath, "POST", payload.toString())
+        val response = sendTeamCityRequest("/app/pipeline", "POST", payload.toString())
         check(response.statusCode() in 200..299) {
             "Failed to create pipeline '$name': HTTP ${response.statusCode()} body=${response.body()}"
         }
 
         return json.parseToJsonElement(response.body()).jsonObject["id"]?.jsonPrimitive?.content
             ?: error("Pipeline creation response missing 'id'")
-    }
-
-    private fun ensurePipelineParentProject() {
-        if (!projectExists(PIPELINE_PARENT_PROJECT_ID)) {
-            createProject(PIPELINE_PARENT_PROJECT_ID)
-        }
     }
 
     protected fun pipelineExists(pipelineId: String): Boolean {
@@ -244,8 +234,6 @@ abstract class McpIntegrationTestBase {
     }
 
     companion object {
-        const val PIPELINE_PARENT_PROJECT_ID = "McpPipelines"
-
         /**
          * A tool that exists only while brave mode is on — used as the probe for
          * [setBraveMode]. Tool names are `internal` in the plugin module, so tests
